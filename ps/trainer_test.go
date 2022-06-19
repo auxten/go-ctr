@@ -125,7 +125,7 @@ func Test_Prediction(t *testing.T) {
 	trainer.Train(n, data, nil, 5000)
 
 	for _, d := range data {
-		assert.InEpsilon(t, n.Predict(d.Input)[0]+1, d.Response[0]+1, 0.1)
+		assert.InEpsilon(t, trainer.Predict(n, d.Input)[0]+1, d.Response[0]+1, 0.1)
 	}
 }
 
