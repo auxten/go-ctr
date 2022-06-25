@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"fmt"
 	"testing"
 
 	. "github.com/smartystreets/goconvey/convey"
@@ -24,6 +25,13 @@ func TestSchema(t *testing.T) {
 		So(schema.DbName, ShouldEqual, "auxten")
 		So(schema.TableName, ShouldEqual, "task_ddl")
 		So(schema.Columns, ShouldHaveLength, 8)
+	})
+
+	Convey("schema not exist", t, func() {
+		scaner := NewMysqlTableScanner(mysqlTestDbName, "not_exist", mysqlTestHost, mysqlTestUser, mysqlTestPassword, mysqlTestPort)
+		schema, err := scaner.GetSchema()
+		So(fmt.Sprint(err), ShouldContainSubstring, "Error 1146: Table 'auxten.not_exist' doesn't exist")
+		So(schema, ShouldBeNil)
 	})
 
 	Convey("get rows", t, func() {

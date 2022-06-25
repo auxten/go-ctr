@@ -15,6 +15,8 @@ var (
 	ErrDDLNotFound = errors.New("ddl not found")
 )
 
+var _ TableScanner = &MysqlTableScanner{}
+
 type MysqlTableScanner struct {
 	DbName    string
 	TableName string

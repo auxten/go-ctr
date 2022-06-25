@@ -6,7 +6,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/auxten/dnn-ranker/nn"
+	"github.com/auxten/edgeRec/nn"
 )
 
 // StatsPrinter prints training progress

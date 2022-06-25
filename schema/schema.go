@@ -13,4 +13,5 @@ type Column struct {
 	Type    string
 	Size    string
 	Comment string
+	Extra   string
 }

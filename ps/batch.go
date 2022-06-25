@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/auxten/dnn-ranker/nn"
+	"github.com/auxten/edgeRec/nn"
 )
 
 // BatchTrainer implements parallelized batch training

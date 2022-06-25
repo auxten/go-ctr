@@ -6,7 +6,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/auxten/dnn-ranker/nn"
+	"github.com/auxten/edgeRec/nn"
 	"github.com/stretchr/testify/assert"
 )
 

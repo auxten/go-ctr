@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/auxten/dnn-ranker/nn"
+	"github.com/auxten/edgeRec/nn"
 )
 
 func Benchmark_xor(b *testing.B) {

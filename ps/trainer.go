@@ -3,7 +3,7 @@ package ps
 import (
 	"time"
 
-	"github.com/auxten/dnn-ranker/nn"
+	"github.com/auxten/edgeRec/nn"
 )
 
 // Trainer is a neural network trainer

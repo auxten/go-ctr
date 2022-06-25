@@ -1,4 +1,4 @@
-module github.com/auxten/dnn-ranker
+module github.com/auxten/edgeRec
 
 go 1.18
 
