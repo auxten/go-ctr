@@ -17,25 +17,25 @@ const (
 )
 
 func TestSchema(t *testing.T) {
-	scaner := NewMysqlTableScanner(mysqlTestDbName, mysqlTestTableName, mysqlTestHost, mysqlTestUser, mysqlTestPassword, mysqlTestPort)
+	scaner := NewMysqlScanner(mysqlTestDbName, mysqlTestHost, mysqlTestUser, mysqlTestPassword, mysqlTestPort)
 	Convey("get schema", t, func() {
-		schema, err := scaner.GetSchema()
+		schema, err := scaner.GetSchema(mysqlTestTableName)
 		So(err, ShouldBeNil)
 		So(schema, ShouldNotBeNil)
-		So(schema.DbName, ShouldEqual, "auxten")
-		So(schema.TableName, ShouldEqual, "task_ddl")
+		So(schema.DbName, ShouldEqual, mysqlTestDbName)
+		So(schema.TableName, ShouldEqual, mysqlTestTableName)
 		So(schema.Columns, ShouldHaveLength, 8)
 	})
 
 	Convey("schema not exist", t, func() {
-		scaner := NewMysqlTableScanner(mysqlTestDbName, "not_exist", mysqlTestHost, mysqlTestUser, mysqlTestPassword, mysqlTestPort)
-		schema, err := scaner.GetSchema()
+		scaner := NewMysqlScanner(mysqlTestDbName, mysqlTestHost, mysqlTestUser, mysqlTestPassword, mysqlTestPort)
+		schema, err := scaner.GetSchema("not_exist")
 		So(fmt.Sprint(err), ShouldContainSubstring, "Error 1146: Table 'auxten.not_exist' doesn't exist")
 		So(schema, ShouldBeNil)
 	})
 
 	Convey("get rows", t, func() {
-		rows, err := scaner.GetRows()
+		rows, err := scaner.GetRows("select * from " + mysqlTestTableName)
 		So(rows.Next(), ShouldBeTrue)
 		var (
 			task_id     int64
@@ -60,5 +60,28 @@ func TestSchema(t *testing.T) {
 		So(priority, ShouldEqual, 1)
 		So(description, ShouldEqual, "task no.1")
 		So(created_at, ShouldEqual, "2022-06-19 23:01:47")
+	})
+}
+
+func TestParseDsn(t *testing.T) {
+	Convey("parse dsn", t, func() {
+		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", mysqlTestUser, mysqlTestPassword, mysqlTestHost, mysqlTestPort, mysqlTestDbName)
+		host, port, user, password, dbName, err := ParseDsn(dsn)
+		So(err, ShouldBeNil)
+		So(host, ShouldEqual, mysqlTestHost)
+		So(port, ShouldEqual, mysqlTestPort)
+		So(user, ShouldEqual, mysqlTestUser)
+		So(password, ShouldEqual, mysqlTestPassword)
+		So(dbName, ShouldEqual, mysqlTestDbName)
+	})
+	Convey("parse dsn no port", t, func() {
+		dsn := fmt.Sprintf("%s:%s@tcp(%s)/", mysqlTestUser, mysqlTestPassword, mysqlTestHost)
+		host, port, user, password, dbName, err := ParseDsn(dsn)
+		So(err, ShouldBeNil)
+		So(host, ShouldEqual, mysqlTestHost)
+		So(port, ShouldEqual, 3306)
+		So(user, ShouldEqual, mysqlTestUser)
+		So(password, ShouldEqual, mysqlTestPassword)
+		So(dbName, ShouldEqual, "")
 	})
 }
