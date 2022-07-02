@@ -76,7 +76,7 @@ func (t *CountVectorizer) FeatureNames() []string {
 	return names
 }
 
-// TransformInplace counts how many time each word appeared in input, inplace version.
+// TransformInplace counts how many times each word appeared in input, inplace version.
 // It is responsibility of caller to zero-out destination.
 // Using zero memory allocation algorithm based on `strings.Split`.
 // Utilizing that string is slice of bytes.

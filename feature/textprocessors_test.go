@@ -62,7 +62,7 @@ func TestCountVectorizer(t *testing.T) {
 		{"no separator utf-8 repeating not counted", " ", map[string]uint{"a": 0, "b": 1, "c": 2}, "안녕안녕안녕", []float64{0, 0, 0}},
 		{"basic", " ", map[string]uint{"a": 0, "b": 1, "c": 2}, "a b c", []float64{1, 1, 1}},
 		{"ending with separator", " ", map[string]uint{"a": 0, "b": 1, "c": 2}, "a b c ", []float64{1, 1, 1}},
-		{"separators continuosly", " ", map[string]uint{"a": 0, "b": 1, "c": 2}, " a b    c  ", []float64{1, 1, 1}},
+		{"separators continuously", " ", map[string]uint{"a": 0, "b": 1, "c": 2}, " a b    c  ", []float64{1, 1, 1}},
 		{"counting", " ", map[string]uint{"a": 0, "b": 1, "c": 2}, "a a a b b c", []float64{3, 2, 1}},
 	}
 
