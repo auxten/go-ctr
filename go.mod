@@ -4,6 +4,7 @@ go 1.18
 
 require (
 	github.com/go-sql-driver/mysql v1.6.0
+	github.com/mattn/go-sqlite3 v1.14.14
 	github.com/smartystreets/goconvey v1.7.2
 	github.com/stretchr/testify v1.7.2
 	github.com/xwb1989/sqlparser v0.0.0-20180606152119-120387863bf2
