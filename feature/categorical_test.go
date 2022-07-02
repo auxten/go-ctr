@@ -1,4 +1,4 @@
-package feature_test
+package feature
 
 import (
 	"testing"
