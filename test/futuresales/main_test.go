@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"fmt"
-	"hash/fnv"
 	"log"
 	"math"
 	"math/rand"
@@ -13,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/auxten/edgeRec/feature"
 	"github.com/auxten/edgeRec/nn"
 	"github.com/auxten/edgeRec/ps"
 	"github.com/auxten/edgeRec/schema"
@@ -47,16 +47,16 @@ func featureTransform(date string, date_block_num float64, shop_id float64,
 	time := time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC)
 	weekDay := time.Weekday()
 	return concatSlice(
-		oneHot(day-1, 31),
-		oneHot(month-1, 12),
-		oneHot(year-2013, 3),
-		oneHot(int(date_block_num), 34),
-		oneHot(int(shop_id), 60),
-		oneHot(int(item_category_id), 84),
-		oneHot(int(weekDay), 7),
-		hashOneHot(float64toBytes(item_id), 10),
+		feature.SimpleOneHot(day-1, 31),
+		feature.SimpleOneHot(month-1, 12),
+		feature.SimpleOneHot(year-2013, 3),
+		feature.SimpleOneHot(int(date_block_num), 34),
+		feature.SimpleOneHot(int(shop_id), 60),
+		feature.SimpleOneHot(int(item_category_id), 84),
+		feature.SimpleOneHot(int(weekDay), 7),
+		feature.HashOneHot(float64toBytes(item_id), 10),
 		[]float64{math.Log2(item_price)},
-		stringSplitMultiHot(item_name, " ", 100),
+		feature.StringSplitMultiHot(item_name, " ", 100),
 	)
 }
 
@@ -69,9 +69,11 @@ func outputRecovery(output float64) float64 {
 	return output * 20.0
 }
 
-func oneHot(value int, size int) []float64 {
-	result := make([]float64, size)
-	result[value] = 1
+func concatSlice(slices ...[]float64) []float64 {
+	result := make([]float64, 0)
+	for _, slice := range slices {
+		result = append(result, slice...)
+	}
 	return result
 }
 
@@ -80,32 +82,6 @@ func float64toBytes(f float64) []byte {
 	bytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(bytes, bits)
 	return bytes
-}
-
-func hashOneHot(buf []byte, size int) []float64 {
-	result := make([]float64, size)
-	hash := fnv.New32()
-	hash.Write(buf)
-	result[int(hash.Sum32())%size] = 1
-	return result
-}
-
-func stringSplitMultiHot(str string, sep string, size int) []float64 {
-	result := make([]float64, size)
-	for _, s := range strings.Split(str, sep) {
-		hash := fnv.New32()
-		hash.Write([]byte(strings.ToLower(s)))
-		result[int(hash.Sum32())%size] = 1
-	}
-	return result
-}
-
-func concatSlice(slices ...[]float64) []float64 {
-	result := make([]float64, 0)
-	for _, slice := range slices {
-		result = append(result, slice...)
-	}
-	return result
 }
 
 func TestTrain(t *testing.T) {

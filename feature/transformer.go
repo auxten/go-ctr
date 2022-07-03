@@ -14,7 +14,7 @@ type stringTransformer interface {
 	Transform(val string) float64
 }
 
-type stringExpandingTransformer interface {
+type expandingTransformer interface {
 	Fit(vals []string)
 	NumFeatures() int
 	Transform(val string) []float64
@@ -72,7 +72,7 @@ func (s *StructTransformer) Transform(v interface{}) []float64 {
 func (s *StructTransformer) getNumFeatures() int {
 	count := 0
 	for _, tr := range s.Transformers {
-		if tr, ok := tr.(stringExpandingTransformer); ok {
+		if tr, ok := tr.(expandingTransformer); ok {
 			count += tr.NumFeatures()
 		} else {
 			count++
@@ -92,7 +92,7 @@ func (s *StructTransformer) transformString(transformer interface{}, val string)
 	if transformer, ok := transformer.(stringTransformer); ok {
 		return []float64{transformer.Transform(val)}
 	}
-	if transformer, ok := transformer.(stringExpandingTransformer); ok {
+	if transformer, ok := transformer.(expandingTransformer); ok {
 		return transformer.Transform(val)
 	}
 	return nil
