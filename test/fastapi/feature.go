@@ -13,7 +13,15 @@ var (
 )
 
 type UserFeature struct {
-	UserId int `json:"userId"`
+	UserId  int      `json:"userId"`
+	Ratings []Rating `json:"ratings"`
+	Tags    []Tag    `json:"tags"`
+}
+
+type ItemFeature struct {
+	MovieId int      `json:"movieId"`
+	Title   string   `json:"title"`
+	Genres  []string `json:"genres"`
 }
 
 func init() {
