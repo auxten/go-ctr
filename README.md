@@ -8,8 +8,8 @@ All in one Recommendation System running on Edge device (Android/iOS/IoT device 
 - [x] Parameter Server based Online Learning
 - [x] Training & Inference all in one binary powered by golang
 - Databases support
-  - [ ] MySQL support
-  - [ ] SQLite support
+  - [x] MySQL support
+  - [x] SQLite support
   - [ ] Database Aggregation accelerated Feature Normalization
 - Feature Engineering
   - [ ] Rule based FE config
@@ -27,6 +27,8 @@ To make this project work, quite a lot of code are copied and modified from the 
 - Feature Engineering:
   - [go-featureprocessing](https://github.com/nikolaydubina/go-featureprocessing)
   - [featuremill](https://github.com/dustin-decker/featuremill)
+- FastAPI like framework:
+  - [go-fastapi](https://github.com/sashabaranov/go-fastapi)
 
 # Papers related
 
