@@ -13,15 +13,13 @@ var (
 )
 
 type UserFeature struct {
-	UserId  int      `json:"userId"`
-	Ratings []Rating `json:"ratings"`
-	Tags    []Tag    `json:"tags"`
+	UserId     int       `json:"userId"`
+	Embeddings []float64 `json:"embeddings"`
 }
 
 type ItemFeature struct {
-	MovieId int      `json:"movieId"`
-	Title   string   `json:"title"`
-	Genres  []string `json:"genres"`
+	MovieId    int       `json:"movieId"`
+	Embeddings []float64 `json:"embeddings"`
 }
 
 func init() {
@@ -32,6 +30,15 @@ func init() {
 	}
 }
 
-func GetUserFeatures(userId int) []float64 {
-	return []float64{}
+func GetUserFeatures(userId int) (uf *UserFeature, err error) {
+	var embeddings []float64
+	err = db.QueryRow("SELECT * FROM user_features WHERE userId = ?", userId).Scan(&embeddings)
+	if err != nil {
+		return
+	}
+	uf = &UserFeature{
+		UserId:     userId,
+		Embeddings: embeddings,
+	}
+	return
 }

@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"fmt"
-	"log"
 	"math"
 	"math/rand"
 	"strconv"
@@ -16,6 +15,7 @@ import (
 	"github.com/auxten/edgeRec/nn"
 	"github.com/auxten/edgeRec/ps"
 	"github.com/auxten/edgeRec/schema"
+	log "github.com/sirupsen/logrus"
 	. "github.com/smartystreets/goconvey/convey"
 )
 
