@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	DbPath        = "../movielens.db"
-	ModelFilePath = "model.bin"
+	DbPath           = "../movielens.db"
+	EmbModelFilePath = "model.txt"
 )
 
 var (
@@ -108,7 +108,7 @@ func PreTrain(recSys RecSys) (err error) {
 	if err != nil {
 		return err
 	}
-	modelFileWriter, err := os.OpenFile(ModelFilePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	modelFileWriter, err := os.OpenFile(EmbModelFilePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}
