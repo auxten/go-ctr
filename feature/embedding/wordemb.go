@@ -6,14 +6,15 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func TrainEmbedding(inputCh <-chan string, window int) (mod model.Model, err error) {
+func TrainEmbedding(inputCh <-chan string, window int, dim int, iter int) (mod model.Model, err error) {
 	if mod, err = word2vec.New(
 		word2vec.Window(window),
+		word2vec.Dim(dim),
 		word2vec.Model(word2vec.SkipGram),
 		word2vec.Optimizer(word2vec.HierarchicalSoftmax),
 		word2vec.NegativeSampleSize(5),
 		word2vec.Verbose(),
-		word2vec.Iter(3),
+		word2vec.Iter(iter),
 		word2vec.DocInMemory(),
 	); err != nil {
 		return

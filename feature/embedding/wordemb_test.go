@@ -15,20 +15,21 @@ import (
 )
 
 var (
-	SearchMovieIds = []string{"63828", "59315", "58559", "59784"}
+	SearchMovieIds = []string{"296", "63828", "59315", "58559", "59784"}
 	ModelFilePath  = "../../test/model.txt"
+	Dim            = 10
 )
 
 func TestEmbedding(t *testing.T) {
 	log.SetLevel(log.DebugLevel)
-	Convey("word embedding", t, func() {
+	Convey("item embedding", t, func() {
 		db, err := sql.Open("sqlite3", "../../test/movielens-10m.db")
 
 		So(err, ShouldBeNil)
 		defer db.Close()
 		rows, err := db.Query(`select userId, movieId
 										from ratings r
-										where r.rating > 1
+										where r.rating > 3.5
 										order by userId, timestamp`)
 		So(err, ShouldBeNil)
 		defer rows.Close()
@@ -45,7 +46,14 @@ func TestEmbedding(t *testing.T) {
 			close(inputCh)
 			log.Debug("input channel closed")
 		}()
-		mod, err := TrainEmbedding(inputCh, 5)
+		mod, err := TrainEmbedding(inputCh, 5, Dim, 1)
+
+		emb, ok := mod.EmbeddingByWord("1")
+		So(ok, ShouldBeTrue)
+		So(emb, ShouldHaveLength, Dim)
+		So(emb[0], ShouldNotBeZeroValue)
+		log.Debugf("embedding of 1: %v", emb)
+
 		modelFileWriter, err := os.OpenFile(ModelFilePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 		So(err, ShouldBeNil)
 		defer modelFileWriter.Close()
@@ -58,7 +66,6 @@ func TestEmbedding(t *testing.T) {
 		So(err, ShouldBeNil)
 		searcher, err := search.New(embs...)
 		So(err, ShouldBeNil)
-
 		for _, SearchMovieId := range SearchMovieIds {
 			neighbors, _ := searcher.SearchInternal(SearchMovieId, 10)
 			neighbors.Describe()
