@@ -18,6 +18,19 @@ All in one Recommendation System running on Edge device (Android/iOS/IoT device 
   - [ ] Android demo
   - [ ] iOS demo
 
+# Benchmark
+
+## Embedding
+
+- Model: SkipGram, Optimizer: HierarchicalSoftmax
+- WindowSize: 5
+- Data: [MovieLens 10m](https://grouplens.org/datasets/movielens/10m/)
+- Database: SQLite3
+```
+read 9520886 words 12.169282375s
+trained 9519544 words 17.155356791s
+```
+
 # Thanks
 
 To make this project work, quite a lot of code are copied and modified from the following libraries:
@@ -27,6 +40,7 @@ To make this project work, quite a lot of code are copied and modified from the 
 - Feature Engineering:
   - [go-featureprocessing](https://github.com/nikolaydubina/go-featureprocessing)
   - [featuremill](https://github.com/dustin-decker/featuremill)
+  - [wego](https://github.com/ynqa/wego)
 - FastAPI like framework:
   - [go-fastapi](https://github.com/sashabaranov/go-fastapi)
 
