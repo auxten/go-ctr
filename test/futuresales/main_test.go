@@ -15,6 +15,7 @@ import (
 	"github.com/auxten/edgeRec/nn"
 	"github.com/auxten/edgeRec/ps"
 	"github.com/auxten/edgeRec/schema"
+	"github.com/auxten/edgeRec/utils"
 	log "github.com/sirupsen/logrus"
 	. "github.com/smartystreets/goconvey/convey"
 )
@@ -46,7 +47,7 @@ func featureTransform(date string, date_block_num float64, shop_id float64,
 	}
 	time := time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC)
 	weekDay := time.Weekday()
-	return concatSlice(
+	return utils.ConcatSlice(
 		feature.SimpleOneHot(day-1, 31),
 		feature.SimpleOneHot(month-1, 12),
 		feature.SimpleOneHot(year-2013, 3),
@@ -67,14 +68,6 @@ func outputTransform(output float64) float64 {
 
 func outputRecovery(output float64) float64 {
 	return output * 20.0
-}
-
-func concatSlice(slices ...[]float64) []float64 {
-	result := make([]float64, 0)
-	for _, slice := range slices {
-		result = append(result, slice...)
-	}
-	return result
 }
 
 func float64toBytes(f float64) []byte {

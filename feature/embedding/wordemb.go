@@ -12,7 +12,6 @@ func TrainEmbedding(inputCh <-chan string, window int, dim int, iter int) (mod m
 		word2vec.Dim(dim),
 		word2vec.Model(word2vec.SkipGram),
 		word2vec.Optimizer(word2vec.HierarchicalSoftmax),
-		word2vec.NegativeSampleSize(5),
 		word2vec.Verbose(),
 		word2vec.Iter(iter),
 		word2vec.DocInMemory(),
