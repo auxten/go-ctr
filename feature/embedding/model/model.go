@@ -25,6 +25,6 @@ type Model interface {
 	Train(<-chan string) error
 	Save(io.Writer, vector.Type) error
 	WordVector(vector.Type) *matrix.Matrix
-	EmbeddingMap() error
+	GenEmbeddingMap() (map[string][]float64, error)
 	EmbeddingByWord(word string) ([]float64, bool)
 }

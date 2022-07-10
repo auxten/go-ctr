@@ -18,8 +18,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/auxten/edgeRec/feature/embedding/embedding"
-	"github.com/auxten/edgeRec/feature/embedding/embedding/embutil"
+	"github.com/auxten/edgeRec/feature/embedding/emb"
+	"github.com/auxten/edgeRec/feature/embedding/emb/embutil"
 	"github.com/auxten/edgeRec/feature/embedding/search/searchutil"
 	"github.com/olekukonko/tablewriter"
 )
@@ -51,11 +51,11 @@ func (neighbors Neighbors) Describe() {
 }
 
 type Searcher struct {
-	Items embedding.Embeddings
+	Items emb.Embeddings
 }
 
-func New(embs ...embedding.Embedding) (*Searcher, error) {
-	if err := embedding.Embeddings(embs).Validate(); err != nil {
+func New(embs ...emb.Embedding) (*Searcher, error) {
+	if err := emb.Embeddings(embs).Validate(); err != nil {
 		return nil, err
 	}
 	return &Searcher{
@@ -64,7 +64,7 @@ func New(embs ...embedding.Embedding) (*Searcher, error) {
 }
 
 func (s *Searcher) SearchInternal(word string, k int) (Neighbors, error) {
-	var q embedding.Embedding
+	var q emb.Embedding
 	for _, item := range s.Items {
 		if item.Word == word {
 			q = item
@@ -83,13 +83,13 @@ func (s *Searcher) SearchInternal(word string, k int) (Neighbors, error) {
 }
 
 func (s *Searcher) SearchVector(query []float64, k int) (Neighbors, error) {
-	return s.Search(embedding.Embedding{
+	return s.Search(emb.Embedding{
 		Vector: query,
 		Norm:   embutil.Norm(query),
 	}, k)
 }
 
-func (s *Searcher) Search(query embedding.Embedding, k int, ignoreWord ...string) (Neighbors, error) {
+func (s *Searcher) Search(query emb.Embedding, k int, ignoreWord ...string) (Neighbors, error) {
 	neighbors := make(Neighbors, k)
 
 	// Map to quickly check if a word is to be ignored.

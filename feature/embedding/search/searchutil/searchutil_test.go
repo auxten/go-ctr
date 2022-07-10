@@ -19,7 +19,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/auxten/edgeRec/feature/embedding/embedding/embutil"
+	"github.com/auxten/edgeRec/feature/embedding/emb/embutil"
 )
 
 func TestCosine(t *testing.T) {

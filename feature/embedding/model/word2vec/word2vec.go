@@ -21,6 +21,7 @@ import (
 	"math/rand"
 	"sync"
 
+	"github.com/auxten/edgeRec/feature/embedding/emb"
 	"golang.org/x/sync/semaphore"
 
 	"github.com/auxten/edgeRec/feature/embedding/corpus"
@@ -46,9 +47,16 @@ type word2vec struct {
 	currentlr    float64
 	mod          mod
 	optimizer    optimizer
-	embeddingMap map[string][]float64
+	embeddingMap EmbeddingMap
 
 	verbose *verbose.Verbose
+}
+
+type EmbeddingMap map[string][]float64
+
+func (m *EmbeddingMap) Get(word string) ([]float64, bool) {
+	vec, ok := (*m)[word]
+	return vec, ok
 }
 
 func New(opts ...ModelOption) (model.Model, error) {
@@ -255,7 +263,7 @@ func (w *word2vec) WordVector(typ vector.Type) *matrix.Matrix {
 	return mat
 }
 
-func (w *word2vec) EmbeddingMap() (err error) {
+func (w *word2vec) GenEmbeddingMap() (embMap map[string][]float64, err error) {
 	dict := w.corpus.Dictionary()
 	wordVec := w.WordVector(vector.Agg)
 	if dict.Len() != wordVec.Row() {
@@ -277,10 +285,28 @@ func (w *word2vec) EmbeddingMap() (err error) {
 
 	log.Debugf("embedding map size %d created %v", len(w.embeddingMap), clk.AllElapsed())
 
+	return w.embeddingMap, nil
+}
+
+func LoadEmbeddingMap(f io.Reader) (embMap map[string][]float64, err error) {
+	var (
+		embeddings emb.Embeddings
+		clk        = clock.New()
+	)
+	embeddings, err = emb.Load(f)
+	if err != nil {
+		return
+	}
+	embMap = make(map[string][]float64)
+	for _, emb := range embeddings {
+		embMap[emb.Word] = emb.Vector
+	}
+
+	log.Debugf("embedding map size %d loaded %v", len(embMap), clk.AllElapsed())
+
 	return
 }
 
 func (w *word2vec) EmbeddingByWord(word string) (vec []float64, ok bool) {
-	vec, ok = w.embeddingMap[word]
-	return
+	return w.embeddingMap.Get(word)
 }

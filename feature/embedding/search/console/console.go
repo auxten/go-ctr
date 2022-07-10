@@ -21,8 +21,8 @@ import (
 	"go/parser"
 	"go/token"
 
-	"github.com/auxten/edgeRec/feature/embedding/embedding"
-	"github.com/auxten/edgeRec/feature/embedding/embedding/embutil"
+	"github.com/auxten/edgeRec/feature/embedding/emb"
+	"github.com/auxten/edgeRec/feature/embedding/emb/embutil"
 	"github.com/auxten/edgeRec/feature/embedding/search"
 	"github.com/peterh/liner"
 )
@@ -104,7 +104,7 @@ func (c *Console) eval(l string) error {
 		if err := c.evalExpr(expr); err != nil {
 			return err
 		}
-		neighbors, err = c.searcher.Search(embedding.Embedding{
+		neighbors, err = c.searcher.Search(emb.Embedding{
 			Vector: c.cursor.vector,
 			Norm:   embutil.Norm(c.cursor.vector),
 		}, c.params.k, c.cursor.w1, c.cursor.w2)
@@ -144,19 +144,19 @@ func (c *Console) evalBinaryExpr(expr *ast.BinaryExpr) error {
 	return err
 }
 
-func (c *Console) evalAsEmbedding(expr ast.Expr) (embedding.Embedding, error) {
+func (c *Console) evalAsEmbedding(expr ast.Expr) (emb.Embedding, error) {
 	if err := c.evalExpr(expr); err != nil {
-		return embedding.Embedding{}, err
+		return emb.Embedding{}, err
 	}
 	v, ok := expr.(*ast.Ident)
 	if !ok {
-		return embedding.Embedding{}, fmt.Errorf("failed to parse %v", expr)
+		return emb.Embedding{}, fmt.Errorf("failed to parse %v", expr)
 	}
 	vi, ok := c.searcher.Items.Find(v.String())
 	if !ok {
-		return embedding.Embedding{}, fmt.Errorf("not found word=%s in vector map", v.String())
+		return emb.Embedding{}, fmt.Errorf("not found word=%s in vector map", v.String())
 	} else if err := vi.Validate(); err != nil {
-		return embedding.Embedding{}, err
+		return emb.Embedding{}, err
 	}
 	return vi, nil
 }

@@ -4,10 +4,12 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"sync"
 
 	"github.com/auxten/edgeRec/feature/embedding"
 	"github.com/auxten/edgeRec/feature/embedding/model"
 	"github.com/auxten/edgeRec/feature/embedding/model/modelutil/vector"
+	"github.com/auxten/edgeRec/feature/embedding/model/word2vec"
 	"github.com/auxten/edgeRec/utils"
 	log "github.com/sirupsen/logrus"
 )
@@ -18,8 +20,7 @@ const (
 )
 
 var (
-	db           *sql.DB
-	embeddingMod model.Model
+	db *sql.DB
 )
 
 func init() {
@@ -48,9 +49,13 @@ type ItemScore struct {
 }
 
 type RecSysImpl struct {
+	EmbeddingMod     model.Model
+	EmbeddingMap     word2vec.EmbeddingMap
+	embeddingMapOnce sync.Once
+	embModelPath     string
 }
 
-func (uf *RecSysImpl) ItemSeqGenerator() <-chan string {
+func (recSys *RecSysImpl) ItemSeqGenerator() <-chan string {
 	ch := make(chan string, 100)
 	go func() {
 		defer close(ch)
@@ -78,12 +83,32 @@ func GetItemEmbeddingModelFromUb(recSys RecSys) (mod model.Model, err error) {
 	return
 }
 
-func Recommend(userId int, itemIds []int) (itemScores []ItemScore, err error) {
+func (recSys *RecSysImpl) Rank(userId int, itemIds []int) (itemScores []ItemScore, err error) {
+	recSys.embeddingMapOnce.Do(func() {
+		if recSys.EmbeddingMod == nil {
+			embReader, err := os.Open(recSys.embModelPath)
+			if err != nil {
+				log.Errorf("failed to open embedding model: %v", err)
+				return
+			}
+			defer embReader.Close()
+			recSys.EmbeddingMap, err = word2vec.LoadEmbeddingMap(embReader)
+			if err != nil {
+				log.Errorf("failed to load embedding model: %v", err)
+				return
+			}
+		} else {
+			recSys.EmbeddingMap, err = recSys.EmbeddingMod.GenEmbeddingMap()
+			if err != nil {
+				return
+			}
+		}
+	})
 	itemScores = make([]ItemScore, len(itemIds))
 	userFeature := GetUserFeature(userId)
 	for i, itemId := range itemIds {
 		itemFeature := GetItemFeature(itemId)
-		itemEmb, _ := embeddingMod.EmbeddingByWord(fmt.Sprintf("%d", itemId))
+		itemEmb, _ := recSys.EmbeddingMap.Get(fmt.Sprint(itemId))
 		itemTensor := utils.ConcatSlice(itemFeature.Tensor(), itemEmb)
 		score := GetScore(userFeature.Tensor(), itemTensor)
 		itemScores[i] = ItemScore{itemId, score}
@@ -103,20 +128,31 @@ func GetScore(userTensor []float64, itemTensor []float64) (score float64) {
 	return
 }
 
-func PreTrain(recSys RecSys) (err error) {
-	embeddingMod, err = GetItemEmbeddingModelFromUb(recSys)
+func (recSys *RecSysImpl) PreTrain(embModelPath string) (err error) {
+	recSys.EmbeddingMod, err = GetItemEmbeddingModelFromUb(recSys)
 	if err != nil {
 		return err
 	}
-	modelFileWriter, err := os.OpenFile(EmbModelFilePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	recSys.embeddingMapOnce.Do(func() {
+		recSys.EmbeddingMap, err = recSys.EmbeddingMod.GenEmbeddingMap()
+		if err != nil {
+			return
+		}
+	})
+	modelFileWriter, err := os.OpenFile(embModelPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}
 	defer modelFileWriter.Close()
-	err = embeddingMod.Save(modelFileWriter, vector.Agg)
+	err = recSys.EmbeddingMod.Save(modelFileWriter, vector.Agg)
 	if err != nil {
 		return err
 	}
 	modelFileWriter.Sync()
+	recSys.embModelPath = embModelPath
 	return nil
+}
+
+func (recSys *RecSysImpl) Train() (err error) {
+	return
 }

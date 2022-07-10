@@ -23,7 +23,7 @@ func TrainEmbedding(inputCh <-chan string, window int, dim int, iter int) (mod m
 		log.Errorf("failed to train embedding: %v", err)
 		return
 	}
-	if err = mod.EmbeddingMap(); err != nil {
+	if _, err = mod.GenEmbeddingMap(); err != nil {
 		log.Errorf("failed to get embedding map: %v", err)
 		return
 	}

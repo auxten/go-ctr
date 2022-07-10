@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/auxten/edgeRec/feature/embedding/embedding"
+	"github.com/auxten/edgeRec/feature/embedding/emb"
 	"github.com/auxten/edgeRec/feature/embedding/model/modelutil/vector"
 	"github.com/auxten/edgeRec/feature/embedding/search"
 	_ "github.com/mattn/go-sqlite3"
@@ -48,11 +48,11 @@ func TestEmbedding(t *testing.T) {
 		}()
 		mod, err := TrainEmbedding(inputCh, 5, Dim, 1)
 
-		emb, ok := mod.EmbeddingByWord("1")
+		embVec, ok := mod.EmbeddingByWord("1")
 		So(ok, ShouldBeTrue)
-		So(emb, ShouldHaveLength, Dim)
-		So(emb[0], ShouldNotBeZeroValue)
-		log.Debugf("embedding of 1: %v", emb)
+		So(embVec, ShouldHaveLength, Dim)
+		So(embVec[0], ShouldNotBeZeroValue)
+		log.Debugf("embedding of 1: %v", embVec)
 
 		modelFileWriter, err := os.OpenFile(ModelFilePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 		So(err, ShouldBeNil)
@@ -62,7 +62,7 @@ func TestEmbedding(t *testing.T) {
 		modelFileWriter.Sync()
 
 		modelFileReader, err := os.Open(ModelFilePath)
-		embs, err := embedding.Load(modelFileReader)
+		embs, err := emb.Load(modelFileReader)
 		So(err, ShouldBeNil)
 		searcher, err := search.New(embs...)
 		So(err, ShouldBeNil)

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package embedding
+package emb
 
 import (
 	"bufio"
@@ -21,7 +21,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/auxten/edgeRec/feature/embedding/embedding/embutil"
+	"github.com/auxten/edgeRec/feature/embedding/emb/embutil"
 	"github.com/pkg/errors"
 )
 

@@ -20,8 +20,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/auxten/edgeRec/feature/embedding/embedding"
-	"github.com/auxten/edgeRec/feature/embedding/embedding/embutil"
+	"github.com/auxten/edgeRec/feature/embedding/emb"
+	"github.com/auxten/edgeRec/feature/embedding/emb/embutil"
 )
 
 func TestSearchInternal(t *testing.T) {
@@ -32,13 +32,13 @@ func TestSearchInternal(t *testing.T) {
 
 	testCases := []struct {
 		name   string
-		items  embedding.Embeddings
+		items  emb.Embeddings
 		args   args
 		expect Neighbors
 	}{
 		{
 			name: "search internal",
-			items: embedding.Embeddings{
+			items: emb.Embeddings{
 				{
 					Word:   "apple",
 					Dim:    5,
@@ -95,13 +95,13 @@ func TestSearchVector(t *testing.T) {
 
 	testCases := []struct {
 		name   string
-		items  embedding.Embeddings
+		items  emb.Embeddings
 		args   args
 		expect Neighbors
 	}{
 		{
 			name: "search vector",
-			items: embedding.Embeddings{
+			items: emb.Embeddings{
 				{
 					Word:   "apple",
 					Dim:    5,
