@@ -30,6 +30,7 @@ const (
 	DbPath           = "../movielens.db"
 	EmbModelFilePath = "model.txt"
 	ItemEmbDim       = 10
+	SampleCnt        = 100
 )
 
 var (
@@ -277,7 +278,7 @@ func genreFeature(genre string) (tensor Tensor) {
 
 func GetSample(recSys RecSys) (sample ps.Samples) {
 	rows, err := db.Query(
-		"SELECT userId, movieId, rating FROM ratings ORDER BY timestamp, userId ASC LIMIT 2000")
+		"SELECT userId, movieId, rating FROM ratings ORDER BY timestamp, userId ASC LIMIT ?", SampleCnt)
 	if err != nil {
 		log.Errorf("failed to query ratings: %v", err)
 		return
@@ -387,10 +388,11 @@ func Train(recSys RecSys) (err error) {
 	mlp.Verbose = true
 	mlp.RandomState = base.NewLockedSource(1)
 	mlp.BatchSize = sampleLen / 200
-	mlp.MaxIter = 200
+	mlp.MaxIter = 100
 	mlp.LearningRate = "adaptive"
 	mlp.LearningRateInit = .003
 	mlp.NIterNoChange = 20
+	mlp.LossFuncName = "square_loss"
 
 	//start training
 	fmt.Printf("\nstart training with %d samples\n", sampleLen)
