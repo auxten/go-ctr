@@ -3,9 +3,13 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"math/rand"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/auxten/edgeRec/feature"
 	"github.com/auxten/edgeRec/feature/embedding"
@@ -21,10 +25,12 @@ import (
 const (
 	DbPath           = "../movielens.db"
 	EmbModelFilePath = "model.txt"
+	ItemEmbDim       = 10
 )
 
 var (
-	db *sql.DB
+	db        *sql.DB
+	yearRegex = regexp.MustCompile(`\((\d{4})\)$`)
 )
 
 func init() {
@@ -36,21 +42,25 @@ func init() {
 }
 
 type RecSys interface {
-	ItemSeq
-	UserFeature
-	ItemFeature
+	UserFeaturer
+	ItemFeaturer
 }
 
-type ItemSeq interface {
-	ItemSeqGenerator() <-chan string
-}
-
-type UserFeature interface {
+type UserFeaturer interface {
 	GetUserFeature(int) []float64
 }
 
-type ItemFeature interface {
+type ItemFeaturer interface {
 	GetItemFeature(int) []float64
+}
+
+type PreTrainer interface {
+	ItemSequencer
+	PreTrain() error
+}
+
+type ItemSequencer interface {
+	ItemSeqGenerator() <-chan string
 }
 
 type ItemScore struct {
@@ -88,9 +98,9 @@ func (recSys *RecSysImpl) ItemSeqGenerator() <-chan string {
 	return ch
 }
 
-func GetItemEmbeddingModelFromUb(recSys RecSys) (mod model.Model, err error) {
+func GetItemEmbeddingModelFromUb(recSys ItemSequencer) (mod model.Model, err error) {
 	itemSeq := recSys.ItemSeqGenerator()
-	mod, err = embedding.TrainEmbedding(itemSeq, 5, 10, 1)
+	mod, err = embedding.TrainEmbedding(itemSeq, 5, ItemEmbDim, 1)
 	return
 }
 
@@ -126,6 +136,60 @@ func (recSys *RecSysImpl) Rank(userId int, itemIds []int) (itemScores []ItemScor
 }
 
 func (recSys *RecSysImpl) GetItemFeature(itemId int) (tensor []float64) {
+	rows, err := db.Query(`select m."movieId"   itemId,
+       "title"       itemTitle,
+       "genres"      itemGenres,
+       r."timestamp" ts
+from ratings r
+         left join movies m on r.movieId = m.movieId WHERE movieId = ?`, itemId)
+	if err != nil {
+		log.Errorf("failed to query ratings: %v", err)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			itemId, ts, movieYear int
+			itemTitle, itemGenres string
+			GenreTensor           [50]float64 // 5 * 10
+			itemEmb               []float64
+
+			ok bool
+		)
+		if err = rows.Scan(&itemId, &itemTitle, &itemGenres, &ts); err != nil {
+			log.Errorf("failed to scan movieId: %v", err)
+			return
+		}
+		if itemEmb, ok = recSys.EmbeddingMap.Get(fmt.Sprint(itemId)); ok {
+			tensor = append(tensor, itemEmb...)
+		} else {
+			var zeroItemEmb [ItemEmbDim]float64
+			tensor = append(tensor, zeroItemEmb[:]...)
+		}
+		//regex match year from itemTitle
+		yearStrSlice := yearRegex.FindStringSubmatch(itemTitle)
+		if len(yearStrSlice) > 1 {
+			movieYear, err = strconv.Atoi(yearStrSlice[1])
+			if err != nil {
+				log.Errorf("failed to parse year: %v", err)
+				return
+			}
+		}
+		//itemGenres
+		genres := strings.Split(itemGenres, "|")
+		for i, genre := range genres {
+			copy(GenreTensor[i*10:], genreFeature(genre))
+		}
+
+		// timestamp feature engineering
+		// timestamp to time.Date
+		t := time.Unix(int64(ts), 0)
+
+		tensor = utils.ConcatSlice(tensor, GenreTensor[:], []float64{
+			float64(t.Year()-1990) / 20.0, float64(movieYear-1990) / 20.0,
+		}, feature.SimpleOneHot(int(t.Month())-1, 12), feature.SimpleOneHot(t.Day()-1, 31), feature.SimpleOneHot(int(t.Weekday()), 7), feature.SimpleOneHot(t.Hour(), 24))
+
+	}
 	return
 }
 
@@ -158,7 +222,7 @@ func (recSys *RecSysImpl) GetUserFeature(userId int) (tensor []float64) {
 	genreList := strings.Split(genres, ",|")
 	top5Genres := utils.TopNOccurrences(genreList, 5)
 	for i, genre := range top5Genres {
-		copy(top5GenresTensor[i*10:], feature.HashOneHot([]byte(genre.Key), 10))
+		copy(top5GenresTensor[i*10:], genreFeature(genre.Key))
 	}
 
 	rows2, err := db.Query(`select avg(rating) as avgRating, 
@@ -181,8 +245,36 @@ func (recSys *RecSysImpl) GetUserFeature(userId int) (tensor []float64) {
 	return
 }
 
-func GetSample() (sample ps.Samples) {
+func genreFeature(genre string) (tensor []float64) {
+	return feature.HashOneHot([]byte(genre), 10)
+}
+
+func GetSample(recSys RecSys) (sample ps.Samples) {
 	rows, err := db.Query("SELECT userId, movieId, rating FROM ratings")
+	if err != nil {
+		log.Errorf("failed to query ratings: %v", err)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			userId, movieId int
+			rating          float64
+			label           float64
+		)
+		if err = rows.Scan(&userId, &movieId, &rating); err != nil {
+			log.Errorf("failed to scan movieId: %v", err)
+			return
+		}
+		userFeature := recSys.GetUserFeature(userId)
+		itemFeature := recSys.GetItemFeature(movieId)
+		if rating > 3.5 {
+			label = 1.0
+		} else {
+			label = 0.0
+		}
+		sample = append(sample, ps.Sample{Input: utils.ConcatSlice(userFeature, itemFeature), Response: []float64{label}})
+	}
 	return
 }
 
@@ -190,7 +282,7 @@ func (recSys *RecSysImpl) GetScore(userTensor []float64, itemTensor []float64) (
 	return recSys.Neural.Predict(utils.ConcatSlice(userTensor, itemTensor))
 }
 
-func (recSys *RecSysImpl) PreTrain(embModelPath string) (err error) {
+func (recSys *RecSysImpl) PreTrain() (err error) {
 	recSys.EmbeddingMod, err = GetItemEmbeddingModelFromUb(recSys)
 	if err != nil {
 		return err
@@ -201,7 +293,7 @@ func (recSys *RecSysImpl) PreTrain(embModelPath string) (err error) {
 			return
 		}
 	})
-	modelFileWriter, err := os.OpenFile(embModelPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	modelFileWriter, err := os.OpenFile(EmbModelFilePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}
@@ -211,10 +303,31 @@ func (recSys *RecSysImpl) PreTrain(embModelPath string) (err error) {
 		return err
 	}
 	modelFileWriter.Sync()
-	recSys.embModelPath = embModelPath
+	recSys.embModelPath = EmbModelFilePath
 	return nil
 }
 
-func (recSys *RecSysImpl) Train() (err error) {
+func Train(recSys RecSys) (err error) {
+	rand.Seed(0)
+	if preTrain, ok := recSys.(PreTrainer); ok {
+		err = preTrain.PreTrain()
+		if err != nil {
+			return
+		}
+	}
+	trainSample := GetSample(recSys)
+	neural := nn.NewNeural(&nn.Config{
+		Inputs:     len(trainSample[0].Input),
+		Layout:     []int{len(trainSample[0].Input), 64, 64, 1},
+		Activation: nn.ActivationSigmoid,
+		Weight:     nn.NewUniform(0.5, 0),
+		Bias:       true,
+	})
+
+	//start training
+	fmt.Printf("\nstart training\n")
+	trainer := ps.NewTrainer(ps.NewSGD(0.01, 0.1, 0, false), 1)
+	trainer.Train(n, trainSample, testSample, 2, true)
+
 	return
 }
