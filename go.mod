@@ -5,6 +5,7 @@ go 1.18
 require (
 	github.com/gin-gonic/gin v1.8.1
 	github.com/go-sql-driver/mysql v1.6.0
+	github.com/karlseguin/ccache/v2 v2.0.8
 	github.com/mattn/go-sqlite3 v1.14.14
 	github.com/olekukonko/tablewriter v0.0.4
 	github.com/pa-m/sklearn v0.0.0-20200711083454-beb861ee48b1
