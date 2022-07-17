@@ -21,3 +21,10 @@ func TestUtils(t *testing.T) {
 		So(len(top100), ShouldEqual, 10)
 	})
 }
+
+func TestGetAUC(t *testing.T) {
+	Convey("test auc", t, func() {
+		auc := RocAuc([]bool{false, true, false, true}, []float64{0.1, 0.35, 0.4, 0.8})
+		So(auc, ShouldEqual, .75)
+	})
+}

@@ -4,6 +4,9 @@ import (
 	"encoding/binary"
 	"math"
 	"sort"
+
+	"gonum.org/v1/gonum/integrate"
+	"gonum.org/v1/gonum/stat"
 )
 
 func ConcatSlice(slices ...[]float64) []float64 {
@@ -53,4 +56,9 @@ func TopNOccurrences(s []string, n int) []KeyCnt {
 	}
 
 	return l1[:n]
+}
+
+func RocAuc(label []bool, y []float64) float64 {
+	tpr, fpr, _ := stat.ROC(nil, y, label, nil)
+	return integrate.Trapezoidal(fpr, tpr)
 }

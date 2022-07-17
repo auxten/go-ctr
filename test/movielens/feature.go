@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/auxten/edgeRec/feature"
 	"github.com/auxten/edgeRec/feature/embedding"
@@ -19,6 +18,7 @@ import (
 	"github.com/auxten/edgeRec/nn"
 	"github.com/auxten/edgeRec/ps"
 	"github.com/auxten/edgeRec/utils"
+	_ "github.com/mattn/go-sqlite3"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -79,7 +79,11 @@ type RecSysImpl struct {
 func (recSys *RecSysImpl) ItemSeqGenerator() <-chan string {
 	ch := make(chan string, 100)
 	go func() {
-		defer close(ch)
+		var i int
+		defer func() {
+			log.Debugf("item seq generator finished: %d", i)
+			close(ch)
+		}()
 		rows, err := db.Query("SELECT movieId FROM ratings r WHERE r.rating > 3.5 order by userId, timestamp")
 		if err != nil {
 			log.Errorf("failed to query ratings: %v", err)
@@ -87,12 +91,13 @@ func (recSys *RecSysImpl) ItemSeqGenerator() <-chan string {
 		}
 		defer rows.Close()
 		for rows.Next() {
-			var movieId int
+			i++
+			var movieId sql.NullInt64
 			if err = rows.Scan(&movieId); err != nil {
 				log.Errorf("failed to scan movieId: %v", err)
-				return
+				continue
 			}
-			ch <- fmt.Sprintf("%d", movieId)
+			ch <- fmt.Sprintf("%d", movieId.Int64)
 		}
 	}()
 	return ch
@@ -136,12 +141,10 @@ func (recSys *RecSysImpl) Rank(userId int, itemIds []int) (itemScores []ItemScor
 }
 
 func (recSys *RecSysImpl) GetItemFeature(itemId int) (tensor []float64) {
-	rows, err := db.Query(`select m."movieId"   itemId,
-       "title"       itemTitle,
-       "genres"      itemGenres,
-       r."timestamp" ts
-from ratings r
-         left join movies m on r.movieId = m.movieId WHERE movieId = ?`, itemId)
+	rows, err := db.Query(`select "movieId"   itemId,
+						   "title"       itemTitle,
+						   "genres"      itemGenres
+					from movies WHERE movieId = ?`, itemId)
 	if err != nil {
 		log.Errorf("failed to query ratings: %v", err)
 		return
@@ -149,14 +152,13 @@ from ratings r
 	defer rows.Close()
 	for rows.Next() {
 		var (
-			itemId, ts, movieYear int
+			itemId, movieYear     int
 			itemTitle, itemGenres string
 			GenreTensor           [50]float64 // 5 * 10
 			itemEmb               []float64
-
-			ok bool
+			ok                    bool
 		)
-		if err = rows.Scan(&itemId, &itemTitle, &itemGenres, &ts); err != nil {
+		if err = rows.Scan(&itemId, &itemTitle, &itemGenres); err != nil {
 			log.Errorf("failed to scan movieId: %v", err)
 			return
 		}
@@ -178,16 +180,15 @@ from ratings r
 		//itemGenres
 		genres := strings.Split(itemGenres, "|")
 		for i, genre := range genres {
+			if i >= 5 {
+				break
+			}
 			copy(GenreTensor[i*10:], genreFeature(genre))
 		}
 
-		// timestamp feature engineering
-		// timestamp to time.Date
-		t := time.Unix(int64(ts), 0)
-
 		tensor = utils.ConcatSlice(tensor, GenreTensor[:], []float64{
-			float64(t.Year()-1990) / 20.0, float64(movieYear-1990) / 20.0,
-		}, feature.SimpleOneHot(int(t.Month())-1, 12), feature.SimpleOneHot(t.Day()-1, 31), feature.SimpleOneHot(int(t.Weekday()), 7), feature.SimpleOneHot(t.Hour(), 24))
+			float64(movieYear-1990) / 20.0,
+		})
 
 	}
 	return
@@ -250,12 +251,15 @@ func genreFeature(genre string) (tensor []float64) {
 }
 
 func GetSample(recSys RecSys) (sample ps.Samples) {
-	rows, err := db.Query("SELECT userId, movieId, rating FROM ratings")
+	rows, err := db.Query("SELECT userId, movieId, rating FROM ratings ORDER BY timestamp ASC LIMIT 2000")
 	if err != nil {
 		log.Errorf("failed to query ratings: %v", err)
 		return
 	}
 	defer rows.Close()
+	var (
+		userFeatureWidth, itemFeatureWidth int
+	)
 	for rows.Next() {
 		var (
 			userId, movieId int
@@ -268,12 +272,32 @@ func GetSample(recSys RecSys) (sample ps.Samples) {
 		}
 		userFeature := recSys.GetUserFeature(userId)
 		itemFeature := recSys.GetItemFeature(movieId)
+		if userFeatureWidth == 0 {
+			userFeatureWidth = len(userFeature)
+		}
+		if len(userFeature) != userFeatureWidth {
+			log.Errorf("user feature length mismatch: %v:%v",
+				userFeatureWidth, len(userFeature))
+			continue
+		}
+		if itemFeatureWidth == 0 {
+			itemFeatureWidth = len(itemFeature)
+		}
+		if len(itemFeature) != itemFeatureWidth {
+			log.Errorf("item feature length mismatch: %v:%v",
+				itemFeatureWidth, len(itemFeature))
+			continue
+		}
+
 		if rating > 3.5 {
 			label = 1.0
 		} else {
 			label = 0.0
 		}
 		sample = append(sample, ps.Sample{Input: utils.ConcatSlice(userFeature, itemFeature), Response: []float64{label}})
+		if len(sample)%100 == 0 {
+			log.Infof("sample size: %d", len(sample))
+		}
 	}
 	return
 }
@@ -316,6 +340,7 @@ func Train(recSys RecSys) (err error) {
 		}
 	}
 	trainSample := GetSample(recSys)
+	sampleLen := len(trainSample)
 	neural := nn.NewNeural(&nn.Config{
 		Inputs:     len(trainSample[0].Input),
 		Layout:     []int{len(trainSample[0].Input), 64, 64, 1},
@@ -325,9 +350,10 @@ func Train(recSys RecSys) (err error) {
 	})
 
 	//start training
-	fmt.Printf("\nstart training\n")
+	fmt.Printf("\nstart training with %d samples\n", sampleLen)
 	trainer := ps.NewTrainer(ps.NewSGD(0.01, 0.1, 0, false), 1)
-	trainer.Train(n, trainSample, testSample, 2, true)
+	trainer.Train(neural, trainSample[:8*sampleLen/10], trainSample[8*sampleLen/10:], 10, true)
 
+	recSys.(*RecSysImpl).Neural = neural
 	return
 }
