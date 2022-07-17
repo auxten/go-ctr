@@ -3,6 +3,7 @@ package utils
 import (
 	"encoding/binary"
 	"math"
+	"sort"
 )
 
 func ConcatSlice(slices ...[]float64) []float64 {
@@ -18,4 +19,38 @@ func Float64toBytes(f float64) []byte {
 	bytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(bytes, bits)
 	return bytes
+}
+
+type KeyCnt struct {
+	Key string
+	Cnt int
+}
+
+func TopNOccurrences(s []string, n int) []KeyCnt {
+	m := make(map[string]int)
+	for _, str := range s {
+		if _, ok := m[str]; ok {
+			m[str]++
+		} else {
+			m[str] = 1
+		}
+	}
+
+	l1 := make([]KeyCnt, 0, len(m))
+	for k, v := range m {
+		l1 = append(l1, KeyCnt{k, v})
+	}
+
+	sort.Slice(l1, func(i, j int) bool {
+		if l1[i].Cnt == l1[j].Cnt {
+			return l1[i].Key < l1[j].Key
+		} else {
+			return l1[i].Cnt > l1[j].Cnt
+		}
+	})
+	if len(l1) < n {
+		return l1
+	}
+
+	return l1[:n]
 }
