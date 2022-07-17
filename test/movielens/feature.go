@@ -4,12 +4,16 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 
+	"github.com/auxten/edgeRec/feature"
 	"github.com/auxten/edgeRec/feature/embedding"
 	"github.com/auxten/edgeRec/feature/embedding/model"
 	"github.com/auxten/edgeRec/feature/embedding/model/modelutil/vector"
 	"github.com/auxten/edgeRec/feature/embedding/model/word2vec"
+	"github.com/auxten/edgeRec/nn"
+	"github.com/auxten/edgeRec/ps"
 	"github.com/auxten/edgeRec/utils"
 	log "github.com/sirupsen/logrus"
 )
@@ -32,15 +36,21 @@ func init() {
 }
 
 type RecSys interface {
+	ItemSeq
+	UserFeature
+	ItemFeature
+}
+
+type ItemSeq interface {
 	ItemSeqGenerator() <-chan string
 }
 
 type UserFeature interface {
-	Tensor() (tensor []float64)
+	GetUserFeature(int) []float64
 }
 
 type ItemFeature interface {
-	Tensor() (tensor []float64)
+	GetItemFeature(int) []float64
 }
 
 type ItemScore struct {
@@ -53,6 +63,7 @@ type RecSysImpl struct {
 	EmbeddingMap     word2vec.EmbeddingMap
 	embeddingMapOnce sync.Once
 	embModelPath     string
+	Neural           *nn.Neural
 }
 
 func (recSys *RecSysImpl) ItemSeqGenerator() <-chan string {
@@ -105,31 +116,78 @@ func (recSys *RecSysImpl) Rank(userId int, itemIds []int) (itemScores []ItemScor
 		}
 	})
 	itemScores = make([]ItemScore, len(itemIds))
-	userFeature := GetUserFeature(userId)
+	userFeature := recSys.GetUserFeature(userId)
 	for i, itemId := range itemIds {
-		itemFeature := GetItemFeature(itemId)
-		itemEmb, _ := recSys.EmbeddingMap.Get(fmt.Sprint(itemId))
-		itemTensor := utils.ConcatSlice(itemFeature.Tensor(), itemEmb)
-		score := GetScore(userFeature.Tensor(), itemTensor)
-		itemScores[i] = ItemScore{itemId, score}
+		itemFeature := recSys.GetItemFeature(itemId)
+		score := recSys.GetScore(userFeature, itemFeature)
+		itemScores[i] = ItemScore{itemId, score[0]}
 	}
 	return
 }
 
-func GetItemFeature(itemId int) (itemFeature ItemFeature) {
+func (recSys *RecSysImpl) GetItemFeature(itemId int) (tensor []float64) {
 	return
 }
 
-func GetUserFeature(userId int) (userFeature UserFeature) {
+func (recSys *RecSysImpl) GetUserFeature(userId int) (tensor []float64) {
+	rows, err := db.Query(`select 
+                           group_concat(genres) as ugenres
+                    from ratings r2
+                             left join movies t2 on r2.movieId = t2.movieId
+                    where userId = ? and
+                    		r2.rating > 3.5
+                    group by userId`, userId)
+	if err != nil {
+		log.Errorf("failed to query ratings: %v", err)
+		return
+	}
+	defer rows.Close()
+	var (
+		genres           string
+		avgRating        float64
+		cntRating        int
+		top5GenresTensor [50]float64
+	)
+	for rows.Next() {
+		if err = rows.Scan(&genres); err != nil {
+			log.Errorf("failed to scan movieId: %v", err)
+			return
+		}
+	}
+
+	genreList := strings.Split(genres, ",|")
+	top5Genres := utils.TopNOccurrences(genreList, 5)
+	for i, genre := range top5Genres {
+		copy(top5GenresTensor[i*10:], feature.HashOneHot([]byte(genre.Key), 10))
+	}
+
+	rows2, err := db.Query(`select avg(rating) as avgRating, 
+						   count(rating) cntRating
+					from ratings where userId = ?`, userId)
+	if err != nil {
+		log.Errorf("failed to query ratings: %v", err)
+		return
+	}
+	defer rows2.Close()
+	for rows2.Next() {
+		if err = rows2.Scan(&avgRating, &cntRating); err != nil {
+			log.Errorf("failed to scan movieId: %v", err)
+			return
+		}
+	}
+
+	tensor = utils.ConcatSlice([]float64{avgRating, float64(cntRating)}, top5GenresTensor[:])
+
 	return
 }
 
-func GetSample(userId int, itemId int, label float64) (sample []float64) {
+func GetSample() (sample ps.Samples) {
+	rows, err := db.Query("SELECT userId, movieId, rating FROM ratings")
 	return
 }
 
-func GetScore(userTensor []float64, itemTensor []float64) (score float64) {
-	return
+func (recSys *RecSysImpl) GetScore(userTensor []float64, itemTensor []float64) (score []float64) {
+	return recSys.Neural.Predict(utils.ConcatSlice(userTensor, itemTensor))
 }
 
 func (recSys *RecSysImpl) PreTrain(embModelPath string) (err error) {

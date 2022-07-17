@@ -162,7 +162,7 @@ func TestTrain(t *testing.T) {
 		//start training
 		fmt.Printf("\nstart training\n")
 		trainer := ps.NewTrainer(ps.NewSGD(0.01, 0.1, 0, false), 1)
-		trainer.Train(n, trainSample, testSample, 2)
+		trainer.Train(n, trainSample, testSample, 2, true)
 
 		predictRows1, err := scanner.GetRows(fmt.Sprintf(`SELECT
 																date, date_block_num,
