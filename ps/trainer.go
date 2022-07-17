@@ -8,7 +8,7 @@ import (
 
 // Trainer is a neural network trainer
 type Trainer interface {
-	Train(n *nn.Neural, examples, validation Samples, iterations int)
+	Train(n *nn.Neural, examples, validation Samples, iterations int, shuffle bool)
 }
 
 // OnlineTrainer is a basic, online network trainer
@@ -43,7 +43,7 @@ func newTraining(layers []*nn.Layer) *internal {
 }
 
 // Train trains n
-func (t *OnlineTrainer) Train(n *nn.Neural, examples, validation Samples, iterations int) {
+func (t *OnlineTrainer) Train(n *nn.Neural, examples, validation Samples, iterations int, shuffle bool) {
 	t.internal = newTraining(n.Layers)
 
 	t.printer.Init(n)
@@ -51,7 +51,9 @@ func (t *OnlineTrainer) Train(n *nn.Neural, examples, validation Samples, iterat
 
 	ts := time.Now()
 	for i := 1; i <= iterations; i++ {
-		examples.Shuffle()
+		if shuffle {
+			examples.Shuffle()
+		}
 		for j := 0; j < len(examples); j++ {
 			t.learn(n, examples[j], i)
 		}

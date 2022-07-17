@@ -61,7 +61,7 @@ func NewBatchTrainer(solver Solver, verbosity, batchSize, parallelism int) *Batc
 }
 
 // Train trains n
-func (t *BatchTrainer) Train(n *nn.Neural, examples, validation Samples, iterations int) {
+func (t *BatchTrainer) Train(n *nn.Neural, examples, validation Samples, iterations int, shuffle bool) {
 	t.internalb = newBatchTraining(n.Layers, t.parallelism)
 
 	train := make(Samples, len(examples))
@@ -89,7 +89,9 @@ func (t *BatchTrainer) Train(n *nn.Neural, examples, validation Samples, iterati
 
 	ts := time.Now()
 	for it := 1; it <= iterations; it++ {
-		train.Shuffle()
+		if shuffle {
+			train.Shuffle()
+		}
 		batches := train.SplitSize(t.batchSize)
 
 		for _, b := range batches {
