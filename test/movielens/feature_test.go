@@ -7,6 +7,7 @@ import (
 	"github.com/auxten/edgeRec/utils"
 	log "github.com/sirupsen/logrus"
 	. "github.com/smartystreets/goconvey/convey"
+	"gonum.org/v1/gonum/mat"
 )
 
 func TestFeatureEngineer(t *testing.T) {
@@ -23,19 +24,24 @@ func TestFeatureEngineer(t *testing.T) {
 			itemId   int
 			expected float64
 		}{
-			{1, 151, 1.},
-			{1, 157, 1.},
-			{3, 31, 0.},
-			{3, 527, 0.},
-			{89, 3088, 0.},
+			{429, 588, 1.},
+			{429, 22, 1.},
+			{107, 1, 1.},
+			{107, 2, 1.},
+			{191, 39, 0.},
+			{11, 1391, 0.},
 		}
 		for _, test := range testData {
 			userFeature := recSys.GetUserFeature(test.userId)
 			itemFeature := recSys.GetItemFeature(test.itemId)
-			input := utils.ConcatSlice(userFeature, itemFeature)
-			pred := recSys.Neural.Predict(input)
-			fmt.Printf("userId:%d, itemId:%d, expected:%f, pred:%f\n", test.userId, test.itemId, test.expected, pred[0])
-			//So(pred[0], ShouldAlmostEqual, test.expected)
+			xSlice := utils.ConcatSlice(userFeature, itemFeature)
+			x := mat.NewDense(1, len(xSlice), xSlice)
+			y := mat.NewDense(1, 1, nil)
+
+			pred := recSys.Neural.Predict(x, y)
+			fmt.Printf("userId:%d, itemId:%d, expected:%f, pred:%f\n",
+				test.userId, test.itemId, test.expected, pred.At(0, 0))
+			//So(pred.At(0, 0), ShouldAlmostEqual, test.expected)
 		}
 	})
 }

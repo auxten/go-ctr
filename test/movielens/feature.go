@@ -15,11 +15,13 @@ import (
 	"github.com/auxten/edgeRec/feature/embedding/model"
 	"github.com/auxten/edgeRec/feature/embedding/model/modelutil/vector"
 	"github.com/auxten/edgeRec/feature/embedding/model/word2vec"
-	"github.com/auxten/edgeRec/nn"
 	"github.com/auxten/edgeRec/ps"
 	"github.com/auxten/edgeRec/utils"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/pa-m/sklearn/base"
+	nn "github.com/pa-m/sklearn/neural_network"
 	log "github.com/sirupsen/logrus"
+	"gonum.org/v1/gonum/mat"
 )
 
 const (
@@ -73,7 +75,8 @@ type RecSysImpl struct {
 	EmbeddingMap     word2vec.EmbeddingMap
 	embeddingMapOnce sync.Once
 	embModelPath     string
-	Neural           *nn.Neural
+	//Neural           *nn.Neural
+	Neural *nn.MLPClassifier
 }
 
 func (recSys *RecSysImpl) ItemSeqGenerator() <-chan string {
@@ -241,7 +244,7 @@ func (recSys *RecSysImpl) GetUserFeature(userId int) (tensor []float64) {
 		}
 	}
 
-	tensor = utils.ConcatSlice([]float64{avgRating, float64(cntRating)}, top5GenresTensor[:])
+	tensor = utils.ConcatSlice([]float64{avgRating / 5., float64(cntRating) / 100.}, top5GenresTensor[:])
 
 	return
 }
@@ -251,7 +254,7 @@ func genreFeature(genre string) (tensor []float64) {
 }
 
 func GetSample(recSys RecSys) (sample ps.Samples) {
-	rows, err := db.Query("SELECT userId, movieId, rating FROM ratings ORDER BY timestamp ASC LIMIT 2000")
+	rows, err := db.Query("SELECT userId, movieId, rating FROM ratings ORDER BY timestamp ASC LIMIT 1000")
 	if err != nil {
 		log.Errorf("failed to query ratings: %v", err)
 		return
@@ -303,7 +306,8 @@ func GetSample(recSys RecSys) (sample ps.Samples) {
 }
 
 func (recSys *RecSysImpl) GetScore(userTensor []float64, itemTensor []float64) (score []float64) {
-	return recSys.Neural.Predict(utils.ConcatSlice(userTensor, itemTensor))
+	panic("not implemented")
+	return
 }
 
 func (recSys *RecSysImpl) PreTrain() (err error) {
@@ -341,19 +345,43 @@ func Train(recSys RecSys) (err error) {
 	}
 	trainSample := GetSample(recSys)
 	sampleLen := len(trainSample)
-	neural := nn.NewNeural(&nn.Config{
-		Inputs:     len(trainSample[0].Input),
-		Layout:     []int{len(trainSample[0].Input), 64, 64, 1},
-		Activation: nn.ActivationSigmoid,
-		Weight:     nn.NewUniform(0.5, 0),
-		Bias:       true,
-	})
+	sampleDense := mat.NewDense(sampleLen, len(trainSample[0].Input), nil)
+	for i, sample := range trainSample {
+		sampleDense.SetRow(i, sample.Input)
+	}
+	yClass := mat.NewDense(sampleLen, 1, nil)
+	for i, sample := range trainSample {
+		yClass.Set(i, 0, sample.Response[0])
+	}
+	mlp := nn.NewMLPClassifier(
+		[]int{len(trainSample[0].Input), len(trainSample[0].Input)},
+		"logistic", "adam", 0.,
+	)
+	mlp.Shuffle = true
+	mlp.Verbose = true
+	mlp.RandomState = base.NewLockedSource(1)
+	mlp.BatchSize = 5
+	mlp.MaxIter = 1000
+	mlp.LearningRate = "adaptive"
+	mlp.LearningRateInit = .002
+	mlp.NIterNoChange = 20
+
+	mlp.Fit(sampleDense, yClass)
+	recSys.(*RecSysImpl).Neural = mlp
+	//neural := nn.NewNeural(&nn.Config{
+	//	Inputs:     len(trainSample[0].Input),
+	//	Layout:     []int{len(trainSample[0].Input), 64, 64, 1},
+	//	Activation: nn.ActivationSigmoid,
+	//	Weight:     nn.NewUniform(0.5, 0),
+	//	Bias:       true,
+	//})
+	//
 
 	//start training
 	fmt.Printf("\nstart training with %d samples\n", sampleLen)
-	trainer := ps.NewTrainer(ps.NewSGD(0.01, 0.1, 0, false), 1)
-	trainer.Train(neural, trainSample[:8*sampleLen/10], trainSample[8*sampleLen/10:], 10, true)
-
-	recSys.(*RecSysImpl).Neural = neural
+	//trainer := ps.NewTrainer(ps.NewSGD(0.01, 0.1, 0, false), 1)
+	//trainer.Train(neural, trainSample[:8*sampleLen/10], trainSample[8*sampleLen/10:], 10, true)
+	//
+	//recSys.(*RecSysImpl).Neural = neural
 	return
 }
