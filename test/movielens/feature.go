@@ -124,6 +124,10 @@ func GetUserFeature(userId int) (userFeature UserFeature) {
 	return
 }
 
+func GetSample(userId int, itemId int, label float64) (sample []float64) {
+	return
+}
+
 func GetScore(userTensor []float64, itemTensor []float64) (score float64) {
 	return
 }

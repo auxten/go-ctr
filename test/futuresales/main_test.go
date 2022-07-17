@@ -2,7 +2,6 @@ package featuresales
 
 import (
 	"database/sql"
-	"encoding/binary"
 	"fmt"
 	"math"
 	"math/rand"
@@ -55,7 +54,7 @@ func featureTransform(date string, date_block_num float64, shop_id float64,
 		feature.SimpleOneHot(int(shop_id), 60),
 		feature.SimpleOneHot(int(item_category_id), 84),
 		feature.SimpleOneHot(int(weekDay), 7),
-		feature.HashOneHot(float64toBytes(item_id), 10),
+		feature.HashOneHot(utils.Float64toBytes(item_id), 10),
 		[]float64{math.Log2(item_price)},
 		feature.StringSplitMultiHot(item_name, " ", 100),
 	)
@@ -68,13 +67,6 @@ func outputTransform(output float64) float64 {
 
 func outputRecovery(output float64) float64 {
 	return output * 20.0
-}
-
-func float64toBytes(f float64) []byte {
-	bits := math.Float64bits(f)
-	bytes := make([]byte, 8)
-	binary.LittleEndian.PutUint64(bytes, bits)
-	return bytes
 }
 
 func TestTrain(t *testing.T) {
