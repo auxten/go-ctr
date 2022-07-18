@@ -38,6 +38,7 @@ To make this project work, quite a lot of code are copied and modified from the 
 - Neural Network & Parameter Server: 
   - [go-deep](https://github.com/patrikeh/go-deep)
   - [gorgonia](https://github.com/gorgonia/gorgonia)
+  - [pa-m/sklearn](https://github.com/pa-m/sklearn)
 - Feature Engineering:
   - [go-featureprocessing](https://github.com/nikolaydubina/go-featureprocessing)
   - [featuremill](https://github.com/dustin-decker/featuremill)

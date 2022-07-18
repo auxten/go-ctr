@@ -16,12 +16,12 @@ import (
 	"github.com/auxten/edgeRec/feature/embedding/model"
 	"github.com/auxten/edgeRec/feature/embedding/model/modelutil/vector"
 	"github.com/auxten/edgeRec/feature/embedding/model/word2vec"
+	"github.com/auxten/edgeRec/nn/base"
+	nn "github.com/auxten/edgeRec/nn/neural_network"
 	"github.com/auxten/edgeRec/ps"
 	"github.com/auxten/edgeRec/utils"
 	"github.com/karlseguin/ccache/v2"
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/pa-m/sklearn/base"
-	nn "github.com/pa-m/sklearn/neural_network"
 	log "github.com/sirupsen/logrus"
 	"gonum.org/v1/gonum/mat"
 )
@@ -37,6 +37,8 @@ var (
 	db        *sql.DB
 	yearRegex = regexp.MustCompile(`\((\d{4})\)$`)
 )
+
+type Tensor []float64
 
 func init() {
 	var err error
@@ -58,8 +60,6 @@ type UserFeaturer interface {
 type ItemFeaturer interface {
 	GetItemFeature(int) Tensor
 }
-
-type Tensor []float64
 
 type PreTrainer interface {
 	ItemSequencer
