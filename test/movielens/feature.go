@@ -17,28 +17,25 @@ import (
 	"github.com/auxten/edgeRec/feature/embedding/model/modelutil/vector"
 	"github.com/auxten/edgeRec/feature/embedding/model/word2vec"
 	"github.com/auxten/edgeRec/nn/base"
-	nn "github.com/auxten/edgeRec/nn/neural_network"
-	"github.com/auxten/edgeRec/ps"
+	rcmd "github.com/auxten/edgeRec/recommend"
 	"github.com/auxten/edgeRec/utils"
 	"github.com/karlseguin/ccache/v2"
 	_ "github.com/mattn/go-sqlite3"
 	log "github.com/sirupsen/logrus"
-	"gonum.org/v1/gonum/mat"
 )
 
 const (
 	DbPath           = "../movielens.db"
 	EmbModelFilePath = "model.txt"
 	ItemEmbDim       = 10
-	SampleCnt        = 100
+	ItemEmbWindow    = 5
+	SampleCnt        = 10000
 )
 
 var (
 	db        *sql.DB
 	yearRegex = regexp.MustCompile(`\((\d{4})\)$`)
 )
-
-type Tensor []float64
 
 func init() {
 	var err error
@@ -48,57 +45,38 @@ func init() {
 	}
 }
 
-type RecSys interface {
-	UserFeaturer
-	ItemFeaturer
-}
-
-type UserFeaturer interface {
-	GetUserFeature(int) Tensor
-}
-
-type ItemFeaturer interface {
-	GetItemFeature(int) Tensor
-}
-
-type PreTrainer interface {
-	ItemSequencer
-	PreTrain() error
-}
-
-type ItemSequencer interface {
-	ItemSeqGenerator() <-chan string
-}
-
-type ItemScore struct {
-	ItemId int     `json:"itemId"`
-	Score  float64 `json:"score"`
-}
-
 type RecSysImpl struct {
 	EmbeddingMod     model.Model
 	EmbeddingMap     word2vec.EmbeddingMap
 	embeddingMapOnce sync.Once
 	embModelPath     string
-	//Neural           *nn.Neural
-	Neural           *nn.MLPClassifier
+	Neural           base.Predicter
 	userFeatureCache *ccache.Cache
 	itemFeatureCache *ccache.Cache
 }
 
-func (recSys *RecSysImpl) ItemSeqGenerator() <-chan string {
+func (recSys *RecSysImpl) ItemSeqGenerator() (ret <-chan string, err error) {
+	var (
+		wg sync.WaitGroup
+	)
+	wg.Add(1)
 	ch := make(chan string, 100)
 	go func() {
-		var i int
+		var (
+			i    int
+			rows *sql.Rows
+		)
 		defer func() {
 			log.Debugf("item seq generator finished: %d", i)
 			close(ch)
 		}()
-		rows, err := db.Query("SELECT movieId FROM ratings r WHERE r.rating > 3.5 order by userId, timestamp")
+		rows, err = db.Query("SELECT movieId FROM ratings r WHERE r.rating > 3.5 order by userId, timestamp")
 		if err != nil {
 			log.Errorf("failed to query ratings: %v", err)
+			wg.Done()
 			return
 		}
+		wg.Done()
 		defer rows.Close()
 		for rows.Next() {
 			i++
@@ -110,47 +88,22 @@ func (recSys *RecSysImpl) ItemSeqGenerator() <-chan string {
 			ch <- fmt.Sprintf("%d", movieId.Int64)
 		}
 	}()
-	return ch
-}
 
-func GetItemEmbeddingModelFromUb(recSys ItemSequencer) (mod model.Model, err error) {
-	itemSeq := recSys.ItemSeqGenerator()
-	mod, err = embedding.TrainEmbedding(itemSeq, 5, ItemEmbDim, 1)
+	wg.Wait()
+	ret = ch
 	return
 }
 
-func (recSys *RecSysImpl) Rank(userId int, itemIds []int) (itemScores []ItemScore, err error) {
-	recSys.embeddingMapOnce.Do(func() {
-		if recSys.EmbeddingMod == nil {
-			embReader, err := os.Open(recSys.embModelPath)
-			if err != nil {
-				log.Errorf("failed to open embedding model: %v", err)
-				return
-			}
-			defer embReader.Close()
-			recSys.EmbeddingMap, err = word2vec.LoadEmbeddingMap(embReader)
-			if err != nil {
-				log.Errorf("failed to load embedding model: %v", err)
-				return
-			}
-		} else {
-			recSys.EmbeddingMap, err = recSys.EmbeddingMod.GenEmbeddingMap()
-			if err != nil {
-				return
-			}
-		}
-	})
-	itemScores = make([]ItemScore, len(itemIds))
-	userFeature := recSys.GetUserFeature(userId)
-	for i, itemId := range itemIds {
-		itemFeature := recSys.GetItemFeature(itemId)
-		score := recSys.GetScore(userFeature, itemFeature)
-		itemScores[i] = ItemScore{itemId, score[0]}
+func GetItemEmbeddingModelFromUb(iSeq rcmd.ItemSequencer) (mod model.Model, err error) {
+	itemSeq, err := iSeq.ItemSeqGenerator()
+	if err != nil {
+		return
 	}
+	mod, err = embedding.TrainEmbedding(itemSeq, ItemEmbWindow, ItemEmbDim, 1)
 	return
 }
 
-func (recSys *RecSysImpl) GetItemFeature(itemId int) (tensor Tensor) {
+func (recSys *RecSysImpl) GetItemFeature(itemId int) (tensor rcmd.Tensor) {
 	itemIdStr := strconv.Itoa(itemId)
 	item, err := recSys.itemFeatureCache.Fetch(itemIdStr, time.Hour*24, func() (cItem interface{}, err error) {
 		rows, err := db.Query(`select "movieId"   itemId,
@@ -162,12 +115,12 @@ func (recSys *RecSysImpl) GetItemFeature(itemId int) (tensor Tensor) {
 			return
 		}
 		defer rows.Close()
-		for rows.Next() {
+		if rows.Next() {
 			var (
 				itemId, movieYear     int
 				itemTitle, itemGenres string
 				GenreTensor           [50]float64 // 5 * 10
-				itemEmb               Tensor
+				itemEmb               rcmd.Tensor
 				ok                    bool
 			)
 			if err = rows.Scan(&itemId, &itemTitle, &itemGenres); err != nil {
@@ -198,21 +151,23 @@ func (recSys *RecSysImpl) GetItemFeature(itemId int) (tensor Tensor) {
 				copy(GenreTensor[i*10:], genreFeature(genre))
 			}
 
-			cItem = Tensor(utils.ConcatSlice(tensor, GenreTensor[:], Tensor{
+			cItem = rcmd.Tensor(utils.ConcatSlice(tensor, GenreTensor[:], rcmd.Tensor{
 				float64(movieYear-1990) / 20.0,
 			}))
+			return
+		} else {
+			return nil, fmt.Errorf("itemId %d not found", itemId)
 		}
-		return
 	})
 	if err != nil {
 		log.Errorf("failed to get item feature: %v", err)
 		return
 	}
 
-	return item.Value().(Tensor)
+	return item.Value().(rcmd.Tensor)
 }
 
-func (recSys *RecSysImpl) GetUserFeature(userId int) (tensor Tensor) {
+func (recSys *RecSysImpl) GetUserFeature(userId int) (tensor rcmd.Tensor) {
 	userIdStr := strconv.Itoa(userId)
 	user, err := recSys.userFeatureCache.Fetch(userIdStr, time.Hour*24, func() (cItem interface{}, err error) {
 		rows, err := db.Query(`select 
@@ -261,7 +216,7 @@ func (recSys *RecSysImpl) GetUserFeature(userId int) (tensor Tensor) {
 			}
 		}
 
-		cItem = Tensor(utils.ConcatSlice(Tensor{avgRating / 5., float64(cntRating) / 100.}, top5GenresTensor[:]))
+		cItem = rcmd.Tensor(utils.ConcatSlice(rcmd.Tensor{avgRating / 5., float64(cntRating) / 100.}, top5GenresTensor[:]))
 		return
 	})
 	if err != nil {
@@ -269,68 +224,64 @@ func (recSys *RecSysImpl) GetUserFeature(userId int) (tensor Tensor) {
 		return
 	}
 
-	return user.Value().(Tensor)
+	return user.Value().(rcmd.Tensor)
 }
 
-func genreFeature(genre string) (tensor Tensor) {
+func genreFeature(genre string) (tensor rcmd.Tensor) {
 	return feature.HashOneHot([]byte(genre), 10)
 }
 
-func GetSample(recSys RecSys) (sample ps.Samples) {
-	rows, err := db.Query(
-		"SELECT userId, movieId, rating FROM ratings ORDER BY timestamp, userId ASC LIMIT ?", SampleCnt)
-	if err != nil {
-		log.Errorf("failed to query ratings: %v", err)
-		return
-	}
-	defer rows.Close()
+func (recSys *RecSysImpl) SampleGenerator() (ret <-chan rcmd.Sample, err error) {
+	sampleCh := make(chan rcmd.Sample)
 	var (
-		userFeatureWidth, itemFeatureWidth int
+		wg sync.WaitGroup
 	)
-	for rows.Next() {
+	wg.Add(1)
+	go func() {
 		var (
-			userId, movieId int
-			rating          float64
-			label           float64
+			i    int
+			rows *sql.Rows
 		)
-		if err = rows.Scan(&userId, &movieId, &rating); err != nil {
-			log.Errorf("failed to scan movieId: %v", err)
+		defer func() {
+			log.Debugf("sample generator finished: %d", i)
+			close(sampleCh)
+		}()
+
+		rows, err = db.Query(
+			"SELECT userId, movieId, rating FROM ratings ORDER BY timestamp, userId ASC LIMIT ?", SampleCnt)
+		if err != nil {
+			log.Errorf("failed to query ratings: %v", err)
+			wg.Done()
 			return
 		}
-		userFeature := recSys.GetUserFeature(userId)
-		itemFeature := recSys.GetItemFeature(movieId)
-		if userFeatureWidth == 0 {
-			userFeatureWidth = len(userFeature)
-		}
-		if len(userFeature) != userFeatureWidth {
-			log.Errorf("user feature length mismatch: %v:%v",
-				userFeatureWidth, len(userFeature))
-			continue
-		}
-		if itemFeatureWidth == 0 {
-			itemFeatureWidth = len(itemFeature)
-		}
-		if len(itemFeature) != itemFeatureWidth {
-			log.Errorf("item feature length mismatch: %v:%v",
-				itemFeatureWidth, len(itemFeature))
-			continue
-		}
+		wg.Done()
+		defer rows.Close()
+		for rows.Next() {
+			i++
+			var (
+				userId, movieId int
+				rating, label   float64
+			)
+			if err = rows.Scan(&userId, &movieId, &rating); err != nil {
+				log.Errorf("failed to scan ratings: %v", err)
+				return
+			}
+			if rating > 3.5 {
+				label = 1.0
+			} else {
+				label = 0.0
+			}
 
-		if rating > 3.5 {
-			label = 1.0
-		} else {
-			label = 0.0
+			sampleCh <- rcmd.Sample{
+				UserId: userId,
+				ItemId: movieId,
+				Label:  label,
+			}
 		}
-		sample = append(sample, ps.Sample{Input: utils.ConcatSlice(userFeature, itemFeature), Response: Tensor{label}})
-		if len(sample)%100 == 0 {
-			log.Infof("sample size: %d", len(sample))
-		}
-	}
-	return
-}
+	}()
 
-func (recSys *RecSysImpl) GetScore(userTensor Tensor, itemTensor Tensor) (score Tensor) {
-	panic("not implemented")
+	wg.Wait()
+	ret = sampleCh
 	return
 }
 
@@ -363,53 +314,26 @@ func (recSys *RecSysImpl) PreTrain() (err error) {
 	return nil
 }
 
-func Train(recSys RecSys) (err error) {
-	if preTrain, ok := recSys.(PreTrainer); ok {
-		err = preTrain.PreTrain()
-		if err != nil {
-			return
+func (recSys *RecSysImpl) PreRank() (err error) {
+	recSys.embeddingMapOnce.Do(func() {
+		if recSys.EmbeddingMod == nil {
+			embReader, err := os.Open(recSys.embModelPath)
+			if err != nil {
+				log.Errorf("failed to open embedding model: %v", err)
+				return
+			}
+			defer embReader.Close()
+			recSys.EmbeddingMap, err = word2vec.LoadEmbeddingMap(embReader)
+			if err != nil {
+				log.Errorf("failed to load embedding model: %v", err)
+				return
+			}
+		} else {
+			recSys.EmbeddingMap, err = recSys.EmbeddingMod.GenEmbeddingMap()
+			if err != nil {
+				return
+			}
 		}
-	}
-	trainSample := GetSample(recSys)
-	sampleLen := len(trainSample)
-	sampleDense := mat.NewDense(sampleLen, len(trainSample[0].Input), nil)
-	for i, sample := range trainSample {
-		sampleDense.SetRow(i, sample.Input)
-	}
-	yClass := mat.NewDense(sampleLen, 1, nil)
-	for i, sample := range trainSample {
-		yClass.Set(i, 0, sample.Response[0])
-	}
-	mlp := nn.NewMLPClassifier(
-		[]int{len(trainSample[0].Input), len(trainSample[0].Input)},
-		"logistic", "adam", 0.,
-	)
-	mlp.Shuffle = true
-	mlp.Verbose = true
-	mlp.RandomState = base.NewLockedSource(1)
-	mlp.BatchSize = sampleLen / 200
-	mlp.MaxIter = 100
-	mlp.LearningRate = "adaptive"
-	mlp.LearningRateInit = .003
-	mlp.NIterNoChange = 20
-	mlp.LossFuncName = "square_loss"
-
-	//start training
-	fmt.Printf("\nstart training with %d samples\n", sampleLen)
-	mlp.Fit(sampleDense, yClass)
-	recSys.(*RecSysImpl).Neural = mlp
-	//neural := nn.NewNeural(&nn.Config{
-	//	Inputs:     len(trainSample[0].Input),
-	//	Layout:     []int{len(trainSample[0].Input), 64, 64, 1},
-	//	Activation: nn.ActivationSigmoid,
-	//	Weight:     nn.NewUniform(0.5, 0),
-	//	Bias:       true,
-	//})
-	//
-
-	//trainer := ps.NewTrainer(ps.NewSGD(0.01, 0.1, 0, false), 1)
-	//trainer.Train(neural, trainSample[:8*sampleLen/10], trainSample[8*sampleLen/10:], 10, true)
-	//
-	//recSys.(*RecSysImpl).Neural = neural
-	return
+	})
+	return err
 }

@@ -4,17 +4,21 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/auxten/edgeRec/utils"
+	rcmd "github.com/auxten/edgeRec/recommend"
 	log "github.com/sirupsen/logrus"
 	. "github.com/smartystreets/goconvey/convey"
-	"gonum.org/v1/gonum/mat"
 )
 
 func TestFeatureEngineer(t *testing.T) {
-	recSys := &RecSysImpl{}
+
+	var (
+		recSys = &RecSysImpl{}
+		model  rcmd.Predictor
+		err    error
+	)
 	Convey("feature engineering", t, func() {
 		log.SetLevel(log.DebugLevel)
-		err := Train(recSys)
+		model, err = rcmd.Train(recSys)
 		So(err, ShouldBeNil)
 	})
 
@@ -32,15 +36,11 @@ func TestFeatureEngineer(t *testing.T) {
 			{11, 1391, 0.},
 		}
 		for _, test := range testData {
-			userFeature := recSys.GetUserFeature(test.userId)
-			itemFeature := recSys.GetItemFeature(test.itemId)
-			xSlice := utils.ConcatSlice(userFeature, itemFeature)
-			x := mat.NewDense(1, len(xSlice), xSlice)
-			y := mat.NewDense(1, 1, nil)
+			score, err := rcmd.Rank(model, test.userId, []int{test.itemId})
+			So(err, ShouldBeNil)
 
-			pred := recSys.Neural.Predict(x, y)
 			fmt.Printf("userId:%d, itemId:%d, expected:%f, pred:%f\n",
-				test.userId, test.itemId, test.expected, pred.At(0, 0))
+				test.userId, test.itemId, test.expected, score[0].Score)
 			//So(pred.At(0, 0), ShouldAlmostEqual, test.expected)
 		}
 	})
