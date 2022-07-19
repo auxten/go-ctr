@@ -12,6 +12,7 @@ All in one Recommendation System running on Edge device (Android/iOS/IoT device 
   - [x] SQLite support
   - [ ] Database Aggregation accelerated Feature Normalization
 - Feature Engineering
+  - [x] Item2vec embedding
   - [ ] Rule based FE config
   - [ ] DeepL based Auto Feature Engineering
 - Demo
