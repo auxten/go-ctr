@@ -86,7 +86,7 @@ func Train(recSys RecSys) (model Predictor, err error) {
 	mlp.Verbose = true
 	mlp.RandomState = base.NewLockedSource(1)
 	mlp.BatchSize = 10
-	mlp.MaxIter = 200
+	mlp.MaxIter = 10
 	mlp.LearningRate = "adaptive"
 	mlp.LearningRateInit = .003
 	mlp.NIterNoChange = 20

@@ -1,29 +1,20 @@
 package main
 
 import (
-	"github.com/gin-gonic/gin"
-	"github.com/sashabaranov/go-fastapi"
+	rcmd "github.com/auxten/edgeRec/recommend"
+	log "github.com/sirupsen/logrus"
 )
 
-type EchoInput struct {
-	Phrase string `json:"phrase"`
-}
-
-type EchoOutput struct {
-	OriginalInput EchoInput `json:"original_input"`
-}
-
-func EchoHandler(ctx *gin.Context, in EchoInput) (out EchoOutput, err error) {
-	out.OriginalInput = in
-	return
-}
-
 func main() {
-	r := gin.Default()
-
-	myRouter := fastapi.NewRouter()
-	myRouter.AddCall("/echo", EchoHandler)
-
-	r.POST("/api/*path", myRouter.GinHandler) // must have *path parameter
-	r.Run()
+	var (
+		recSys = &RecSysImpl{}
+		model  rcmd.Predictor
+		err    error
+	)
+	log.SetLevel(log.DebugLevel)
+	model, err = rcmd.Train(recSys)
+	if err != nil {
+		log.Fatal(err)
+	}
+	rcmd.StartHttpApi(model, "/api/v1/recommend", ":8080")
 }
