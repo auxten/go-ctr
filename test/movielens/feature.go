@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"math/rand"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -12,10 +11,6 @@ import (
 	"time"
 
 	"github.com/auxten/edgeRec/feature"
-	"github.com/auxten/edgeRec/feature/embedding"
-	"github.com/auxten/edgeRec/feature/embedding/model"
-	"github.com/auxten/edgeRec/feature/embedding/model/modelutil/vector"
-	"github.com/auxten/edgeRec/feature/embedding/model/word2vec"
 	"github.com/auxten/edgeRec/nn/base"
 	rcmd "github.com/auxten/edgeRec/recommend"
 	"github.com/auxten/edgeRec/utils"
@@ -27,8 +22,6 @@ import (
 const (
 	DbPath           = "../movielens.db"
 	EmbModelFilePath = "model.txt"
-	ItemEmbDim       = 10
-	ItemEmbWindow    = 5
 	SampleCnt        = 10000
 )
 
@@ -46,10 +39,6 @@ func init() {
 }
 
 type RecSysImpl struct {
-	EmbeddingMod     model.Model
-	EmbeddingMap     word2vec.EmbeddingMap
-	embeddingMapOnce sync.Once
-	embModelPath     string
 	Neural           base.Predicter
 	userFeatureCache *ccache.Cache
 	itemFeatureCache *ccache.Cache
@@ -94,15 +83,6 @@ func (recSys *RecSysImpl) ItemSeqGenerator() (ret <-chan string, err error) {
 	return
 }
 
-func GetItemEmbeddingModelFromUb(iSeq rcmd.ItemSequencer) (mod model.Model, err error) {
-	itemSeq, err := iSeq.ItemSeqGenerator()
-	if err != nil {
-		return
-	}
-	mod, err = embedding.TrainEmbedding(itemSeq, ItemEmbWindow, ItemEmbDim, 1)
-	return
-}
-
 func (recSys *RecSysImpl) GetItemFeature(itemId int) (tensor rcmd.Tensor) {
 	itemIdStr := strconv.Itoa(itemId)
 	item, err := recSys.itemFeatureCache.Fetch(itemIdStr, time.Hour*24, func() (cItem interface{}, err error) {
@@ -120,18 +100,10 @@ func (recSys *RecSysImpl) GetItemFeature(itemId int) (tensor rcmd.Tensor) {
 				itemId, movieYear     int
 				itemTitle, itemGenres string
 				GenreTensor           [50]float64 // 5 * 10
-				itemEmb               rcmd.Tensor
-				ok                    bool
 			)
 			if err = rows.Scan(&itemId, &itemTitle, &itemGenres); err != nil {
 				log.Errorf("failed to scan movieId: %v", err)
 				return
-			}
-			if itemEmb, ok = recSys.EmbeddingMap.Get(fmt.Sprint(itemId)); ok {
-				tensor = append(tensor, itemEmb...)
-			} else {
-				var zeroItemEmb [ItemEmbDim]float64
-				tensor = append(tensor, zeroItemEmb[:]...)
 			}
 			//regex match year from itemTitle
 			yearStrSlice := yearRegex.FindStringSubmatch(itemTitle)
@@ -290,50 +262,5 @@ func (recSys *RecSysImpl) PreTrain() (err error) {
 	recSys.userFeatureCache = ccache.New(ccache.Configure().MaxSize(100000).ItemsToPrune(1000))
 	recSys.itemFeatureCache = ccache.New(ccache.Configure().MaxSize(1000000).ItemsToPrune(10000))
 
-	recSys.EmbeddingMod, err = GetItemEmbeddingModelFromUb(recSys)
-	if err != nil {
-		return err
-	}
-	recSys.embeddingMapOnce.Do(func() {
-		recSys.EmbeddingMap, err = recSys.EmbeddingMod.GenEmbeddingMap()
-		if err != nil {
-			return
-		}
-	})
-	modelFileWriter, err := os.OpenFile(EmbModelFilePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-	if err != nil {
-		return err
-	}
-	defer modelFileWriter.Close()
-	err = recSys.EmbeddingMod.Save(modelFileWriter, vector.Agg)
-	if err != nil {
-		return err
-	}
-	modelFileWriter.Sync()
-	recSys.embModelPath = EmbModelFilePath
 	return nil
-}
-
-func (recSys *RecSysImpl) PreRank() (err error) {
-	recSys.embeddingMapOnce.Do(func() {
-		if recSys.EmbeddingMod == nil {
-			embReader, err := os.Open(recSys.embModelPath)
-			if err != nil {
-				log.Errorf("failed to open embedding model: %v", err)
-				return
-			}
-			defer embReader.Close()
-			recSys.EmbeddingMap, err = word2vec.LoadEmbeddingMap(embReader)
-			if err != nil {
-				log.Errorf("failed to load embedding model: %v", err)
-				return
-			}
-		} else {
-			recSys.EmbeddingMap, err = recSys.EmbeddingMod.GenEmbeddingMap()
-			if err != nil {
-				return
-			}
-		}
-	})
-	return err
 }

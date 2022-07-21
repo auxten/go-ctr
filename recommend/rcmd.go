@@ -1,12 +1,27 @@
 package recommend
 
 import (
+	"strconv"
+
+	"github.com/auxten/edgeRec/feature/embedding"
+	"github.com/auxten/edgeRec/feature/embedding/model"
+	"github.com/auxten/edgeRec/feature/embedding/model/word2vec"
 	"github.com/auxten/edgeRec/nn/base"
 	nn "github.com/auxten/edgeRec/nn/neural_network"
 	"github.com/auxten/edgeRec/ps"
 	"github.com/auxten/edgeRec/utils"
 	log "github.com/sirupsen/logrus"
 	"gonum.org/v1/gonum/mat"
+)
+
+const (
+	ItemEmbDim    = 10
+	ItemEmbWindow = 5
+)
+
+var (
+	ItemEmbeddingModel model.Model
+	ItemEmbeddingMap   word2vec.EmbeddingMap
 )
 
 type Tensor []float64
@@ -40,13 +55,12 @@ type PreRanker interface {
 }
 
 type PreTrainer interface {
-	ItemSequencer
 	PreTrain() error
 }
 
-//ItemSequencer is an interface to generate user generated time-series item sequence
+//ItemEmbedding is an interface to generate user generated time-series item sequence
 //for training the item2vec embedding model
-type ItemSequencer interface {
+type ItemEmbedding interface {
 	ItemSeqGenerator() (<-chan string, error)
 }
 
@@ -65,9 +79,24 @@ func Train(recSys RecSys) (model Predictor, err error) {
 	if preTrain, ok := recSys.(PreTrainer); ok {
 		err = preTrain.PreTrain()
 		if err != nil {
+			log.Errorf("pre train error: %v", err)
 			return
 		}
 	}
+
+	if itemEbd, ok := recSys.(ItemEmbedding); ok {
+		ItemEmbeddingModel, err = GetItemEmbeddingModelFromUb(itemEbd)
+		if err != nil {
+			log.Errorf("get item embedding model error: %v", err)
+			return
+		}
+		ItemEmbeddingMap, err = ItemEmbeddingModel.GenEmbeddingMap()
+		if err != nil {
+			log.Errorf("get item embedding map error: %v", err)
+			return
+		}
+	}
+
 	trainSample := GetSample(recSys)
 	sampleLen := len(trainSample)
 	sampleDense := mat.NewDense(sampleLen, len(trainSample[0].Input), nil)
@@ -86,7 +115,7 @@ func Train(recSys RecSys) (model Predictor, err error) {
 	mlp.Verbose = true
 	mlp.RandomState = base.NewLockedSource(1)
 	mlp.BatchSize = 10
-	mlp.MaxIter = 10
+	mlp.MaxIter = 50
 	mlp.LearningRate = "adaptive"
 	mlp.LearningRateInit = .003
 	mlp.NIterNoChange = 20
@@ -144,7 +173,6 @@ func GetSample(recSys RecSys) (sample ps.Samples) {
 
 	for s := range sampleCh {
 		userFeature := recSys.GetUserFeature(s.UserId)
-		itemFeature := recSys.GetItemFeature(s.ItemId)
 		if userFeatureWidth == 0 {
 			userFeatureWidth = len(userFeature)
 		}
@@ -152,6 +180,17 @@ func GetSample(recSys RecSys) (sample ps.Samples) {
 			log.Errorf("user feature length mismatch: %v:%v",
 				userFeatureWidth, len(userFeature))
 			continue
+		}
+
+		itemFeature := recSys.GetItemFeature(s.ItemId)
+		// if ItemEmbedding interface is implemented, use item embedding
+		if _, ok := recSys.(ItemEmbedding); ok {
+			if itemEmb, ok := ItemEmbeddingMap.Get(strconv.Itoa(s.ItemId)); ok {
+				itemFeature = append(itemFeature, itemEmb...)
+			} else {
+				var zeroItemEmb [ItemEmbDim]float64
+				itemFeature = append(itemFeature, zeroItemEmb[:]...)
+			}
 		}
 		if itemFeatureWidth == 0 {
 			itemFeatureWidth = len(itemFeature)
@@ -168,5 +207,14 @@ func GetSample(recSys RecSys) (sample ps.Samples) {
 		}
 	}
 
+	return
+}
+
+func GetItemEmbeddingModelFromUb(iSeq ItemEmbedding) (mod model.Model, err error) {
+	itemSeq, err := iSeq.ItemSeqGenerator()
+	if err != nil {
+		return
+	}
+	mod, err = embedding.TrainEmbedding(itemSeq, ItemEmbWindow, ItemEmbDim, 1)
 	return
 }

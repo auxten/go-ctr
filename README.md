@@ -1,11 +1,29 @@
 # edgeRec
 
-All in one Recommendation System running on Edge device (Android/iOS/IoT device etc.)
+All in one Recommendation System can run on small server or edge device (Android/iOS/IoT device etc.)
 
+To create a deep learning based recommendation system, you need to follow the steps below:
+
+1. Implement the `recommend.RecSys` interface including func below:
+    ```
+   GetUserFeature(int) Tensor
+   GetItemFeature(int) Tensor
+   SampleGenerator() (<-chan Sample, error)
+   ```
+2. Call the functions to `Train` and `StartHttpApi`
+
+     ```
+    model, _ = rcmd.Train(recSys)
+    rcmd.StartHttpApi(model, "/api/v1/recommend", ":8080")
+    ```
+   a Movie Lens based example is provided in the `example/movielens` directory. Corresponding database structure is in the `example/movielens/data.go` file.
+
+3. If you want better AUC, you can implement the `recommend.`
 
 # Features
 
-- [x] Parameter Server based Online Learning
+- [x] Pure Golang implementation
+- [ ] Parameter Server based Online Learning
 - [x] Training & Inference all in one binary powered by golang
 - Databases support
   - [x] MySQL support
@@ -16,6 +34,7 @@ All in one Recommendation System running on Edge device (Android/iOS/IoT device 
   - [ ] Rule based FE config
   - [ ] DeepL based Auto Feature Engineering
 - Demo
+  - [x] MovieLens Demo 
   - [ ] Android demo
   - [ ] iOS demo
 
