@@ -6,19 +6,29 @@ To create a deep learning based recommendation system, you need to follow the st
 
 1. Implement the `recommend.RecSys` interface including func below:
     ```
-   GetUserFeature(int) Tensor
-   GetItemFeature(int) Tensor
+   GetUserFeature(int) (Tensor, error)
+   GetItemFeature(int) (Tensor, error)
    SampleGenerator() (<-chan Sample, error)
    ```
 2. Call the functions to `Train` and `StartHttpApi`
 
      ```
-    model, _ = rcmd.Train(recSys)
-    rcmd.StartHttpApi(model, "/api/v1/recommend", ":8080")
+    model, _ = recommend.Train(recSys)
+    recommend.StartHttpApi(model, "/api/v1/recommend", ":8080")
     ```
-   a Movie Lens based example is provided in the `example/movielens` directory. Corresponding database structure is in the `example/movielens/data.go` file.
+   a MovieLens based example is provided in the `example/movielens` directory. Corresponding database structure is in the `example/movielens/data.go` file.
 
-3. If you want better AUC, you can implement the `recommend.`
+3. If you want better AUC with item embedding, you can implement the `recommend.ItemEmbedding` interface including func below:
+    ```
+    //ItemEmbedding is an interface used to generate item embedding with item2vec model
+    //by just providing a behavior based item sequence.
+    // Example: user liked items sequence, user bought items sequence, 
+    //   user viewed items sequence
+    type ItemEmbedding interface {
+        ItemSeqGenerator() (<-chan string, error)
+    }
+    ```
+   
 
 # Features
 

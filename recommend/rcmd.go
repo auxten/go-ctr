@@ -63,8 +63,9 @@ type PreTrainer interface {
 	PreTrain() error
 }
 
-//ItemEmbedding is an interface to generate user generated time-series item sequence
-//for training the item2vec embedding model
+//ItemEmbedding is an interface used to generate item embedding with item2vec model
+//by just providing a behavior based item sequence.
+// Example: user liked items sequence, user bought items sequence, user viewed items sequence
 type ItemEmbedding interface {
 	ItemSeqGenerator() (<-chan string, error)
 }
