@@ -3,18 +3,15 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"math/rand"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/auxten/edgeRec/feature"
 	"github.com/auxten/edgeRec/nn/base"
 	rcmd "github.com/auxten/edgeRec/recommend"
 	"github.com/auxten/edgeRec/utils"
-	"github.com/karlseguin/ccache/v2"
 	_ "github.com/mattn/go-sqlite3"
 	log "github.com/sirupsen/logrus"
 )
@@ -39,9 +36,7 @@ func init() {
 }
 
 type RecSysImpl struct {
-	Neural           base.Predicter
-	userFeatureCache *ccache.Cache
-	itemFeatureCache *ccache.Cache
+	Neural base.Predicter
 }
 
 func (recSys *RecSysImpl) ItemSeqGenerator() (ret <-chan string, err error) {
@@ -83,120 +78,105 @@ func (recSys *RecSysImpl) ItemSeqGenerator() (ret <-chan string, err error) {
 	return
 }
 
-func (recSys *RecSysImpl) GetItemFeature(itemId int) (tensor rcmd.Tensor) {
-	itemIdStr := strconv.Itoa(itemId)
-	item, err := recSys.itemFeatureCache.Fetch(itemIdStr, time.Hour*24, func() (cItem interface{}, err error) {
-		rows, err := db.Query(`select "movieId"   itemId,
+func (recSys *RecSysImpl) GetItemFeature(itemId int) (tensor rcmd.Tensor, err error) {
+	var (
+		rows *sql.Rows
+	)
+	rows, err = db.Query(`select "movieId"   itemId,
 						   "title"       itemTitle,
 						   "genres"      itemGenres
 					from movies WHERE movieId = ?`, itemId)
-		if err != nil {
-			log.Errorf("failed to query ratings: %v", err)
-			return
-		}
-		defer rows.Close()
-		if rows.Next() {
-			var (
-				itemId, movieYear     int
-				itemTitle, itemGenres string
-				GenreTensor           [50]float64 // 5 * 10
-			)
-			if err = rows.Scan(&itemId, &itemTitle, &itemGenres); err != nil {
-				log.Errorf("failed to scan movieId: %v", err)
-				return
-			}
-			//regex match year from itemTitle
-			yearStrSlice := yearRegex.FindStringSubmatch(itemTitle)
-			if len(yearStrSlice) > 1 {
-				movieYear, err = strconv.Atoi(yearStrSlice[1])
-				if err != nil {
-					log.Errorf("failed to parse year: %v", err)
-					return
-				}
-			}
-			//itemGenres
-			genres := strings.Split(itemGenres, "|")
-			for i, genre := range genres {
-				if i >= 5 {
-					break
-				}
-				copy(GenreTensor[i*10:], genreFeature(genre))
-			}
-
-			cItem = rcmd.Tensor(utils.ConcatSlice(tensor, GenreTensor[:], rcmd.Tensor{
-				float64(movieYear-1990) / 20.0,
-			}))
-			return
-		} else {
-			return nil, fmt.Errorf("itemId %d not found", itemId)
-		}
-	})
 	if err != nil {
-		log.Errorf("failed to get item feature: %v", err)
+		log.Errorf("failed to query ratings: %v", err)
 		return
 	}
+	defer rows.Close()
+	if rows.Next() {
+		var (
+			itemId, movieYear     int
+			itemTitle, itemGenres string
+			GenreTensor           [50]float64 // 5 * 10
+		)
+		if err = rows.Scan(&itemId, &itemTitle, &itemGenres); err != nil {
+			log.Errorf("failed to scan movieId: %v", err)
+			return
+		}
+		//regex match year from itemTitle
+		yearStrSlice := yearRegex.FindStringSubmatch(itemTitle)
+		if len(yearStrSlice) > 1 {
+			movieYear, err = strconv.Atoi(yearStrSlice[1])
+			if err != nil {
+				log.Errorf("failed to parse year: %v", err)
+				return
+			}
+		}
+		//itemGenres
+		genres := strings.Split(itemGenres, "|")
+		for i, genre := range genres {
+			if i >= 5 {
+				break
+			}
+			copy(GenreTensor[i*10:], genreFeature(genre))
+		}
 
-	return item.Value().(rcmd.Tensor)
+		tensor = utils.ConcatSlice(tensor, GenreTensor[:], rcmd.Tensor{
+			float64(movieYear-1990) / 20.0,
+		})
+		return
+	}
+	return
 }
 
-func (recSys *RecSysImpl) GetUserFeature(userId int) (tensor rcmd.Tensor) {
-	userIdStr := strconv.Itoa(userId)
-	user, err := recSys.userFeatureCache.Fetch(userIdStr, time.Hour*24, func() (cItem interface{}, err error) {
-		rows, err := db.Query(`select 
+func (recSys *RecSysImpl) GetUserFeature(userId int) (tensor rcmd.Tensor, err error) {
+	var (
+		rows, rows2      *sql.Rows
+		genres           string
+		avgRating        float64
+		cntRating        int
+		top5GenresTensor [50]float64
+	)
+	rows, err = db.Query(`select 
                            group_concat(genres) as ugenres
                     from ratings r2
                              left join movies t2 on r2.movieId = t2.movieId
                     where userId = ? and
                     		r2.rating > 3.5
                     group by userId`, userId)
-		if err != nil {
-			log.Errorf("failed to query ratings: %v", err)
-			return
-		}
-		defer rows.Close()
-		var (
-			genres           string
-			avgRating        float64
-			cntRating        int
-			top5GenresTensor [50]float64
-		)
-		for rows.Next() {
-			if err = rows.Scan(&genres); err != nil {
-				log.Errorf("failed to scan movieId: %v", err)
-				return
-			}
-		}
-
-		genreList := strings.Split(genres, ",|")
-		top5Genres := utils.TopNOccurrences(genreList, 5)
-		for i, genre := range top5Genres {
-			copy(top5GenresTensor[i*10:], genreFeature(genre.Key))
-		}
-
-		rows2, err := db.Query(`select avg(rating) as avgRating, 
-						   count(rating) cntRating
-					from ratings where userId = ?`, userId)
-		if err != nil {
-			log.Errorf("failed to query ratings: %v", err)
-			return
-		}
-		defer rows2.Close()
-		for rows2.Next() {
-			if err = rows2.Scan(&avgRating, &cntRating); err != nil {
-				log.Errorf("failed to scan movieId: %v", err)
-				return
-			}
-		}
-
-		cItem = rcmd.Tensor(utils.ConcatSlice(rcmd.Tensor{avgRating / 5., float64(cntRating) / 100.}, top5GenresTensor[:]))
-		return
-	})
 	if err != nil {
-		log.Errorf("failed to fetch user feature: %v", err)
+		log.Errorf("failed to query ratings: %v", err)
 		return
 	}
+	defer rows.Close()
+	for rows.Next() {
+		if err = rows.Scan(&genres); err != nil {
+			log.Errorf("failed to scan movieId: %v", err)
+			return
+		}
+	}
 
-	return user.Value().(rcmd.Tensor)
+	genreList := strings.Split(genres, ",|")
+	top5Genres := utils.TopNOccurrences(genreList, 5)
+	for i, genre := range top5Genres {
+		copy(top5GenresTensor[i*10:], genreFeature(genre.Key))
+	}
+
+	rows2, err = db.Query(`select avg(rating) as avgRating, 
+						   count(rating) cntRating
+					from ratings where userId = ?`, userId)
+	if err != nil {
+		log.Errorf("failed to query ratings: %v", err)
+		return
+	}
+	defer rows2.Close()
+	for rows2.Next() {
+		if err = rows2.Scan(&avgRating, &cntRating); err != nil {
+			log.Errorf("failed to scan movieId: %v", err)
+			return
+		}
+	}
+
+	tensor = utils.ConcatSlice(rcmd.Tensor{avgRating / 5., float64(cntRating) / 100.}, top5GenresTensor[:])
+	return
 }
 
 func genreFeature(genre string) (tensor rcmd.Tensor) {
@@ -255,12 +235,4 @@ func (recSys *RecSysImpl) SampleGenerator() (ret <-chan rcmd.Sample, err error) 
 	wg.Wait()
 	ret = sampleCh
 	return
-}
-
-func (recSys *RecSysImpl) PreTrain() (err error) {
-	rand.Seed(0)
-	recSys.userFeatureCache = ccache.New(ccache.Configure().MaxSize(100000).ItemsToPrune(1000))
-	recSys.itemFeatureCache = ccache.New(ccache.Configure().MaxSize(1000000).ItemsToPrune(10000))
-
-	return nil
 }

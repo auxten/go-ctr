@@ -1,7 +1,9 @@
 package recommend
 
 import (
+	"math/rand"
 	"strconv"
+	"time"
 
 	"github.com/auxten/edgeRec/feature/embedding"
 	"github.com/auxten/edgeRec/feature/embedding/model"
@@ -10,18 +12,21 @@ import (
 	nn "github.com/auxten/edgeRec/nn/neural_network"
 	"github.com/auxten/edgeRec/ps"
 	"github.com/auxten/edgeRec/utils"
+	"github.com/karlseguin/ccache/v2"
 	log "github.com/sirupsen/logrus"
 	"gonum.org/v1/gonum/mat"
 )
 
 const (
-	ItemEmbDim    = 10
-	ItemEmbWindow = 5
+	ItemEmbDim           = 10
+	ItemEmbWindow        = 5
+	userFeatureCacheSize = 100000
+	itemFeatureCacheSize = 1000000
 )
 
 var (
-	ItemEmbeddingModel model.Model
-	ItemEmbeddingMap   word2vec.EmbeddingMap
+	itemEmbeddingModel model.Model
+	itemEmbeddingMap   word2vec.EmbeddingMap
 )
 
 type Tensor []float64
@@ -43,11 +48,11 @@ type Trainer interface {
 }
 
 type UserFeaturer interface {
-	GetUserFeature(int) Tensor
+	GetUserFeature(int) (Tensor, error)
 }
 
 type ItemFeaturer interface {
-	GetItemFeature(int) Tensor
+	GetItemFeature(int) (Tensor, error)
 }
 
 type PreRanker interface {
@@ -76,6 +81,8 @@ type Sample struct {
 }
 
 func Train(recSys RecSys) (model Predictor, err error) {
+	rand.Seed(0)
+
 	if preTrain, ok := recSys.(PreTrainer); ok {
 		err = preTrain.PreTrain()
 		if err != nil {
@@ -85,19 +92,19 @@ func Train(recSys RecSys) (model Predictor, err error) {
 	}
 
 	if itemEbd, ok := recSys.(ItemEmbedding); ok {
-		ItemEmbeddingModel, err = GetItemEmbeddingModelFromUb(itemEbd)
+		itemEmbeddingModel, err = GetItemEmbeddingModelFromUb(itemEbd)
 		if err != nil {
 			log.Errorf("get item embedding model error: %v", err)
 			return
 		}
-		ItemEmbeddingMap, err = ItemEmbeddingModel.GenEmbeddingMap()
+		itemEmbeddingMap, err = itemEmbeddingModel.GenEmbeddingMap()
 		if err != nil {
 			log.Errorf("get item embedding map error: %v", err)
 			return
 		}
 	}
 
-	trainSample := GetSample(recSys)
+	trainSample, err := GetSample(recSys)
 	sampleLen := len(trainSample)
 	sampleDense := mat.NewDense(sampleLen, len(trainSample[0].Input), nil)
 	for i, sample := range trainSample {
@@ -115,7 +122,7 @@ func Train(recSys RecSys) (model Predictor, err error) {
 	mlp.Verbose = true
 	mlp.RandomState = base.NewLockedSource(1)
 	mlp.BatchSize = 10
-	mlp.MaxIter = 50
+	mlp.MaxIter = 100
 	mlp.LearningRate = "adaptive"
 	mlp.LearningRateInit = .003
 	mlp.NIterNoChange = 20
@@ -141,13 +148,25 @@ func Rank(recSys Predictor, userId int, itemIds []int) (itemScores []ItemScore, 
 	if preRanker, ok := recSys.(PreRanker); ok {
 		err = preRanker.PreRank()
 		if err != nil {
+			log.Errorf("pre rank error: %v", err)
 			return
 		}
 	}
+	var (
+		userFeature, itemFeature Tensor
+	)
 	itemScores = make([]ItemScore, len(itemIds))
-	userFeature := recSys.GetUserFeature(userId)
+	userFeature, err = recSys.GetUserFeature(userId)
+	if err != nil {
+		log.Errorf("get user feature error: %v", err)
+		return
+	}
 	for i, itemId := range itemIds {
-		itemFeature := recSys.GetItemFeature(itemId)
+		itemFeature, err = recSys.GetItemFeature(itemId)
+		if err != nil {
+			log.Errorf("get item feature error: %v", err)
+			return
+		}
 		xSlice := utils.ConcatSlice(userFeature, itemFeature)
 		x := mat.NewDense(1, len(xSlice), xSlice)
 		y := mat.NewDense(1, 1, nil)
@@ -158,7 +177,19 @@ func Rank(recSys Predictor, userId int, itemIds []int) (itemScores []ItemScore, 
 	return
 }
 
-func GetSample(recSys RecSys) (sample ps.Samples) {
+func GetSample(recSys RecSys) (sample ps.Samples, err error) {
+	var (
+		userFeatureWidth, itemFeatureWidth int
+		userFeatureCache                   *ccache.Cache
+		itemFeatureCache                   *ccache.Cache
+	)
+	userFeatureCache = ccache.New(
+		ccache.Configure().MaxSize(userFeatureCacheSize).ItemsToPrune(userFeatureCacheSize / 100),
+	)
+	itemFeatureCache = ccache.New(
+		ccache.Configure().MaxSize(itemFeatureCacheSize).ItemsToPrune(itemFeatureCacheSize / 100),
+	)
+
 	sampleGen, ok := recSys.(Trainer)
 	if !ok {
 		panic("sample generator not implemented")
@@ -167,12 +198,20 @@ func GetSample(recSys RecSys) (sample ps.Samples) {
 	if err != nil {
 		panic(err)
 	}
-	var (
-		userFeatureWidth, itemFeatureWidth int
-	)
 
 	for s := range sampleCh {
-		userFeature := recSys.GetUserFeature(s.UserId)
+		var (
+			user, item *ccache.Item
+		)
+		userIdStr := strconv.Itoa(s.UserId)
+		user, err = userFeatureCache.Fetch(userIdStr, time.Hour*24, func() (cItem interface{}, err error) {
+			cItem, err = recSys.GetUserFeature(s.UserId)
+			return
+		})
+		if err != nil {
+			continue
+		}
+		userFeature := user.Value().(Tensor)
 		if userFeatureWidth == 0 {
 			userFeatureWidth = len(userFeature)
 		}
@@ -182,10 +221,19 @@ func GetSample(recSys RecSys) (sample ps.Samples) {
 			continue
 		}
 
-		itemFeature := recSys.GetItemFeature(s.ItemId)
+		itemIdStr := strconv.Itoa(s.ItemId)
+		item, err = itemFeatureCache.Fetch(itemIdStr, time.Hour*24, func() (cItem interface{}, err error) {
+			cItem, err = recSys.GetItemFeature(s.ItemId)
+			return
+		})
+		if err != nil {
+			continue
+		}
+		itemFeature := item.Value().(Tensor)
+
 		// if ItemEmbedding interface is implemented, use item embedding
 		if _, ok := recSys.(ItemEmbedding); ok {
-			if itemEmb, ok := ItemEmbeddingMap.Get(strconv.Itoa(s.ItemId)); ok {
+			if itemEmb, ok := itemEmbeddingMap.Get(strconv.Itoa(s.ItemId)); ok {
 				itemFeature = append(itemFeature, itemEmb...)
 			} else {
 				var zeroItemEmb [ItemEmbDim]float64
