@@ -60,7 +60,26 @@ To create a deep learning based recommendation system, you need to follow the st
 ```
 read 9520886 words 12.169282375s
 trained 9519544 words 17.155356791s
+
+Search Embedding of:
+   59784 "Kung Fu Panda (2008)" Action|Animation|Children|Comedy
+
+  RANK | WORD  | SIMILARITY  | TITLE & GENRES
+-------+-------+-------------+-------------
+     1 | 60072 |   0.974392  | Wanted (2008) Action|Thriller
+     2 | 60040 |   0.974080  | Incredible Hulk, The (2008) Action|Fantasy|Sci-Fi
+     3 | 60069 |   0.973728  | WALL·E (2008) Adventure|Animation|Children|Comedy|Romance|Sci-Fi
+     4 | 60074 |   0.970396  | Hancock (2008) Action|Comedy|Drama|Fantasy
+     5 | 63859 |   0.969845  | Bolt (2008) Action|Adventure|Animation|Children|Comedy
+     6 | 57640 |   0.969305  | Hellboy II: The Golden Army (2008) Action|Adventure|Comedy|Fantasy|Sci-Fi
+     7 | 58299 |   0.967733  | Horton Hears a Who! (2008) Adventure|Animation|Children|Comedy
+     8 | 59037 |   0.966410  | Speed Racer (2008) Action|Adventure|Children
+     9 | 59315 |   0.964556  | Iron Man (2008) Action|Adventure|Sci-Fi
+    10 | 58105 |   0.963332  | Spiderwick Chronicles, The (2008) Adventure|Children|Drama|Fantasy
+
 ```
+
+## Movie Recommend Performance
 
 # Thanks
 
