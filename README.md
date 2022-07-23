@@ -96,6 +96,8 @@ To make this project work, quite a lot of code are copied and modified from the 
   - [wego](https://github.com/ynqa/wego)
 - FastAPI like framework:
   - [go-fastapi](https://github.com/sashabaranov/go-fastapi)
+- Gopher logo with [GIMP](https://www.gimp.org/):
+  - [ashleymcnamara/gophers](https://github.com/ashleymcnamara/gophers)
 
 # Papers related
 
