@@ -1,5 +1,7 @@
 # edgeRec
 
+![logo](art/logo.png)
+
 All in one Recommendation System can run on small server or edge device (Android/iOS/IoT device etc.)
 
 To create a deep learning based recommendation system, you need to follow the steps below:
