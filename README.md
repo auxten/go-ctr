@@ -2,7 +2,7 @@
 
 ![logo](art/logo.png)
 
-Training & Predict all in one Recommendation System that can run on small server or edge device (Android/iOS/IoT device etc.)
+Feature-Engineering & Training & Predict all in one Recommendation System that can run on small server or edge device (Android/iOS/IoT device etc.)
 
 To create a deep learning based recommendation system, you need to follow the steps below:
 
@@ -30,11 +30,12 @@ To create a deep learning based recommendation system, you need to follow the st
         ItemSeqGenerator() (<-chan string, error)
     }
     ```
-   
+   All you need to do is implement the functions of the yellow part:
+   ![](art/edgerec.png)
 
 # Features
 
-- [x] Pure Golang implementation
+- [x] Pure Golang implementation, battery included.
 - [ ] Parameter Server based Online Learning
 - [x] Training & Inference all in one binary powered by golang
 - Databases support
@@ -97,8 +98,9 @@ Search Embedding of:
 - Q: Where can I use this?
 - A: Simple system with a database. With 100 lines of golang, you got a better than nothing recommendation system.
 
-- Q: Where should not I use this?
-- A: Large 
+
+- Q: Where wouldn't I use this?
+- A: Large (100+ million) dataset using SOTA models.
 
 # Thanks
 
