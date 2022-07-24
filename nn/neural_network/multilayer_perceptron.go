@@ -130,5 +130,5 @@ func (mlp *MLPClassifier) Score(Xmatrix, Ymatrix mat.Matrix) float64 {
 	Ypred := mat.NewDense(X.RawMatrix().Rows, Y.RawMatrix().Cols, nil)
 	mlp.Predict(X, Ypred)
 
-	return accuracyScore64(Y.RawMatrix(), Ypred.RawMatrix())
+	return AccuracyScore64(Y.RawMatrix(), Ypred.RawMatrix())
 }

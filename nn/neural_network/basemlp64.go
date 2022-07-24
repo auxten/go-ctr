@@ -814,7 +814,7 @@ func (mlp *BaseMultilayerPerceptron64) fitStochastic(X, y blas64General, activat
 			mlp.t += nSamples
 			mlp.LossCurve = append(mlp.LossCurve, mlp.Loss)
 			if mlp.Verbose {
-				fmt.Printf("Iteration %d, loss = %.8f\n", mlp.NIter, mlp.Loss)
+				fmt.Printf("Iteration %d, NoImprove %d, loss = %.8f\n", mlp.NIter, mlp.NoImprovementCount, mlp.Loss)
 			}
 			// # update noImprovementCount based on training loss or
 			// # validation score according to earlyStopping
@@ -935,7 +935,7 @@ func (mlp *BaseMultilayerPerceptron64) score(X, Y blas64General) float64 {
 	mlp.predict(X, H)
 	if mlp.LossFuncName != "square_loss" {
 		// accuracy
-		return accuracyScore64(Y, H)
+		return AccuracyScore64(Y, H)
 	}
 	// R2Score
 	return r2Score64(Y, H)
@@ -981,7 +981,7 @@ func (mlp *BaseMultilayerPerceptron64) Score(Xmatrix, Ymatrix mat.Matrix) float6
 	if mlp.LossFuncName == "square_loss" {
 		return float64(r2Score64(blas64.General(Y), Ypred))
 	}
-	return float64(accuracyScore64(blas64.General(Y), Ypred))
+	return float64(AccuracyScore64(blas64.General(Y), Ypred))
 }
 
 // SGDOptimizer64 is the stochastic gradient descent optimizer
@@ -1140,7 +1140,7 @@ func r2Score64(yTrue, yPred blas64General) float64 {
 	return r2acc / float64(yTrue.Cols)
 }
 
-func accuracyScore64(Y, H blas64General) float64 {
+func AccuracyScore64(Y, H blas64General) float64 {
 	N := float64(0)
 	for i, hpos, ypos := 0, 0, 0; i < Y.Rows; i, hpos, ypos = i+1, hpos+H.Stride, ypos+Y.Stride {
 		rowEq := true
