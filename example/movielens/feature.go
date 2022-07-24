@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -35,7 +36,8 @@ func init() {
 }
 
 type RecSysImpl struct {
-	Neural base.Predicter
+	Neural     base.Predicter
+	mRatingMap map[int][2]float64
 }
 
 func (recSys *RecSysImpl) ItemSeqGenerator() (ret <-chan string, err error) {
@@ -53,7 +55,7 @@ func (recSys *RecSysImpl) ItemSeqGenerator() (ret <-chan string, err error) {
 			log.Debugf("item seq generator finished: %d", i)
 			close(ch)
 		}()
-		rows, err = db.Query("SELECT movieId FROM ratings r WHERE r.rating > 3.5 order by userId, timestamp")
+		rows, err = db.Query("SELECT movieId FROM ratings_train r WHERE r.rating > 3.5 order by userId, timestamp")
 		if err != nil {
 			log.Errorf("failed to query ratings: %v", err)
 			wg.Done()
@@ -78,13 +80,16 @@ func (recSys *RecSysImpl) ItemSeqGenerator() (ret <-chan string, err error) {
 }
 
 func (recSys *RecSysImpl) GetItemFeature(itemId int) (tensor rcmd.Tensor, err error) {
+	// get movie avg rating and rating count
 	var (
 		rows *sql.Rows
 	)
-	rows, err = db.Query(`select "movieId"   itemId,
-						   "title"       itemTitle,
-						   "genres"      itemGenres
-					from movies WHERE movieId = ?`, itemId)
+
+	rows, err = db.Query(`select m."movieId" itemId,
+					   "title"     itemTitle,
+					   "genres"    itemGenres
+				from movies m
+				WHERE m.movieId = ?`, itemId)
 	if err != nil {
 		log.Errorf("failed to query ratings: %v", err)
 		return
@@ -94,6 +99,7 @@ func (recSys *RecSysImpl) GetItemFeature(itemId int) (tensor rcmd.Tensor, err er
 		var (
 			itemId, movieYear     int
 			itemTitle, itemGenres string
+			avgRating, cntRating  float64
 			GenreTensor           [50]float64 // 5 * 10
 		)
 		if err = rows.Scan(&itemId, &itemTitle, &itemGenres); err != nil {
@@ -117,10 +123,17 @@ func (recSys *RecSysImpl) GetItemFeature(itemId int) (tensor rcmd.Tensor, err er
 			}
 			copy(GenreTensor[i*10:], genreFeature(genre))
 		}
+		if mr, ok := recSys.mRatingMap[itemId]; ok {
+			avgRating = mr[0] / 5.
+			cntRating = math.Log2(mr[1])
+		}
 
 		tensor = utils.ConcatSlice(tensor, GenreTensor[:], rcmd.Tensor{
-			float64(movieYear-1990) / 20.0,
+			float64(movieYear-1990) / 20.0, avgRating, cntRating,
 		})
+		return
+	} else {
+		err = fmt.Errorf("itemId %d not found", itemId)
 		return
 	}
 	return
@@ -136,7 +149,7 @@ func (recSys *RecSysImpl) GetUserFeature(userId int) (tensor rcmd.Tensor, err er
 	)
 	rows, err = db.Query(`select 
                            group_concat(genres) as ugenres
-                    from ratings r2
+                    from ratings_train r2
                              left join movies t2 on r2.movieId = t2.movieId
                     where userId = ? and
                     		r2.rating > 3.5
@@ -159,6 +172,8 @@ func (recSys *RecSysImpl) GetUserFeature(userId int) (tensor rcmd.Tensor, err er
 		copy(top5GenresTensor[i*10:], genreFeature(genre.Key))
 	}
 
+	// Theoretically, user feature should select from ratings_train, but we use ratings
+	// to make it easy to test AUC. In a real case, this will not cause time travel.
 	rows2, err = db.Query(`select avg(rating) as avgRating, 
 						   count(rating) cntRating
 					from ratings where userId = ?`, userId)
@@ -230,6 +245,36 @@ func (recSys *RecSysImpl) SampleGenerator() (ret <-chan rcmd.Sample, err error) 
 
 	wg.Wait()
 	ret = sampleCh
+	return
+}
+
+func (recSys *RecSysImpl) PreTrain() (err error) {
+	// get movie avg rating and rating count
+	var (
+		rows1 *sql.Rows
+	)
+	rows1, err = db.Query(`select movieId, avg(rating) avg_r, count(rating) cnt_r
+                    from ratings
+                    group by movieId`)
+	if err != nil {
+		log.Errorf("failed to query ratings: %v", err)
+		return
+	}
+	defer rows1.Close()
+	recSys.mRatingMap = make(map[int][2]float64)
+	for rows1.Next() {
+		var (
+			movieId int
+			avgR    float64
+			cntR    int
+		)
+		if err = rows1.Scan(&movieId, &avgR, &cntR); err != nil {
+			log.Errorf("failed to scan movieId: %v", err)
+			return
+		}
+		recSys.mRatingMap[movieId] = [2]float64{avgR, float64(cntR)}
+	}
+
 	return
 }
 

@@ -55,20 +55,19 @@ func TestFeatureEngineer(t *testing.T) {
 
 		rocAuc := metrics.ROCAUCScore(yTrue, yPred, "", nil)
 		fmt.Printf("rocAuc:%f\n", rocAuc)
-		//So(rocAuc, ShouldBeGreaterThan, 0.7)
 	})
 
 	Convey("test set ROC AUC", t, func() {
 		testCount := 20836
 		rows, err := db.Query(
-			"SELECT userId, movieId, rating FROM ratings_test LIMIT ?", testCount)
+			"SELECT userId, movieId, rating FROM ratings_test ORDER BY timestamp, userId ASC LIMIT ?", testCount)
 		So(err, ShouldBeNil)
 		var (
-			userId int
-			itemId int
-			rating float64
-			yTrue  = mat.NewDense(testCount, 1, nil)
-			yPred  = mat.NewDense(testCount, 1, nil)
+			userId       int
+			itemId       int
+			rating       float64
+			yTrue        = mat.NewDense(testCount, 1, nil)
+			userAndItems [][2]int
 		)
 		for i := 0; rows.Next(); i++ {
 			err = rows.Scan(&userId, &itemId, &rating)
@@ -76,12 +75,10 @@ func TestFeatureEngineer(t *testing.T) {
 				t.Errorf("scan error: %v", err)
 			}
 			yTrue.Set(i, 0, BinarizeLabel(rating))
-			score, err := rcmd.Rank(model, userId, []int{itemId})
-			if err != nil {
-				t.Errorf("rank error: %v", err)
-			}
-			yPred.Set(i, 0, score[0].Score)
+			userAndItems = append(userAndItems, [2]int{userId, itemId})
 		}
+		yPred, err := rcmd.BatchPredict(model, userAndItems)
+		So(err, ShouldBeNil)
 		rocAuc := metrics.ROCAUCScore(yTrue, yPred, "", nil)
 		rowCount, _ := yTrue.Dims()
 		fmt.Printf("rocAuc on test set %d: %f\n", rowCount, rocAuc)
