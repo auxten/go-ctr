@@ -4,7 +4,11 @@
 
 Feature-Engineering & Training & Predict all in one Recommendation System that can run on small server or edge device (Android/iOS/IoT device etc.)
 
+# Quick Start
+
 To create a deep learning based recommendation system, you need to follow the steps below:
+
+if you prefer `show me the code`, just go to [MovieLens Example](examples/movielens)
 
 1. Implement the `recommend.RecSys` interface including func below:
     ```
@@ -18,7 +22,6 @@ To create a deep learning based recommendation system, you need to follow the st
     model, _ = recommend.Train(recSys)
     recommend.StartHttpApi(model, "/api/v1/recommend", ":8080")
     ```
-   a MovieLens based example is provided in the `example/movielens` directory. Corresponding database structure is in the `example/movielens/data.go` file.
 
 3. If you want better AUC with item embedding, you can implement the `recommend.ItemEmbedding` interface including func below:
     ```
