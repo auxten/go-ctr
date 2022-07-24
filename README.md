@@ -83,6 +83,23 @@ Search Embedding of:
 
 ## Movie Recommend Performance
 
+- Dataset: MovieLens 100k, 80% training data, 20% test data
+- Code: [example/movielens](example/movielens)
+- Training time: 28s
+- AUC: 0.744
+
+# Q&A
+
+- Q: What model do you use?
+- A: Just 2 layers of neural network and item2vec embedding.
+
+
+- Q: Where can I use this?
+- A: Simple system with a database. With 100 lines of golang, you got a better than nothing recommendation system.
+
+- Q: Where should not I use this?
+- A: Large 
+
 # Thanks
 
 To make this project work, quite a lot of code are copied and modified from the following libraries:
