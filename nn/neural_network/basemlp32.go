@@ -1230,7 +1230,7 @@ func ToDense32(m Matrix) General32 {
 
 // FromDense32 fills dst (mat.Mutable) with src (mat.Dense)
 func FromDense32(dst Mutable, dense General32) General32 {
-	if dst == Mutable(nil) {
+	if dst == nil {
 		return dense
 	}
 	src := dense.RawMatrix()

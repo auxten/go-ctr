@@ -116,16 +116,16 @@ func Train(recSys RecSys) (model Predictor, err error) {
 		yClass.Set(i, 0, sample.Response[0])
 	}
 	mlp := nn.NewMLPClassifier(
-		[]int{len(trainSample[0].Input), len(trainSample[0].Input)},
-		"logistic", "adam", 0.,
+		[]int{100, len(trainSample[0].Input)},
+		"logistic", "adam", 1e-5,
 	)
 	mlp.Shuffle = true
 	mlp.Verbose = true
 	mlp.RandomState = base.NewLockedSource(1)
-	mlp.BatchSize = 10
-	mlp.MaxIter = 100
+	mlp.BatchSize = 100
+	mlp.MaxIter = 2000
 	mlp.LearningRate = "adaptive"
-	mlp.LearningRateInit = .003
+	mlp.LearningRateInit = .0025
 	mlp.NIterNoChange = 20
 
 	//start training

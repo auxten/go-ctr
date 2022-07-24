@@ -17,9 +17,8 @@ import (
 )
 
 const (
-	DbPath           = "../movielens.db"
-	EmbModelFilePath = "model.txt"
-	SampleCnt        = 10000
+	DbPath    = "../movielens.db"
+	SampleCnt = 80000
 )
 
 var (
@@ -200,7 +199,7 @@ func (recSys *RecSysImpl) SampleGenerator() (ret <-chan rcmd.Sample, err error) 
 		}()
 
 		rows, err = db.Query(
-			"SELECT userId, movieId, rating FROM ratings ORDER BY timestamp, userId ASC LIMIT ?", SampleCnt)
+			"SELECT userId, movieId, rating FROM ratings_train ORDER BY timestamp, userId ASC LIMIT ?", SampleCnt)
 		if err != nil {
 			log.Errorf("failed to query ratings: %v", err)
 			wg.Done()
@@ -218,11 +217,8 @@ func (recSys *RecSysImpl) SampleGenerator() (ret <-chan rcmd.Sample, err error) 
 				log.Errorf("failed to scan ratings: %v", err)
 				return
 			}
-			if rating > 3.5 {
-				label = 1.0
-			} else {
-				label = 0.0
-			}
+			label = BinarizeLabel(rating)
+			//label = rating / 5.0
 
 			sampleCh <- rcmd.Sample{
 				UserId: userId,
@@ -235,4 +231,11 @@ func (recSys *RecSysImpl) SampleGenerator() (ret <-chan rcmd.Sample, err error) 
 	wg.Wait()
 	ret = sampleCh
 	return
+}
+
+func BinarizeLabel(rating float64) float64 {
+	if rating > 3.5 {
+		return 1.0
+	}
+	return 0.0
 }

@@ -227,7 +227,6 @@ func matRowMean64(a blas64General, b []float64) {
 // NewBaseMultilayerPerceptron64 returns a BaseMultilayerPerceptron64 with defaults
 func NewBaseMultilayerPerceptron64() *BaseMultilayerPerceptron64 {
 	return &BaseMultilayerPerceptron64{
-
 		Activation:       "relu",
 		Solver:           "adam",
 		Alpha:            0.0001,
@@ -746,6 +745,7 @@ func (mlp *BaseMultilayerPerceptron64) fitStochastic(X, y blas64General, activat
 				Params:           params,
 				LearningRateInit: mlp.LearningRateInit,
 				LearningRate:     mlp.LearningRateInit,
+				LRSchedule:       mlp.LearningRate,
 				Beta1:            mlp.Beta1, Beta2: mlp.Beta2, Epsilon: mlp.Epsilon,
 			}
 		}
@@ -1015,9 +1015,9 @@ func (opt *SGDOptimizer64) triggerStopping(msg string, verbose bool) bool {
 		}
 		return true
 	}
-	opt.LearningRate /= 5.
+	opt.LearningRate *= .8
 	if verbose {
-		fmt.Println(msg+" Setting learning rate to %f", opt.LearningRate)
+		fmt.Printf("%s Setting learning rate to %f\n", msg, opt.LearningRate)
 	}
 	return false
 }
@@ -1043,14 +1043,35 @@ type AdamOptimizer64 struct {
 	Params                []float64
 	LearningRateInit      float64
 	LearningRate          float64
+	LRSchedule            string
 	Beta1, Beta2, Epsilon float64
 	t                     float64
 	ms, vs                []float64
 	beta1t, beta2t        float64
 }
 
-func (opt *AdamOptimizer64) iterationEnds(timeStep float64)                {}
-func (opt *AdamOptimizer64) triggerStopping(msg string, verbose bool) bool { return true }
+func (opt *AdamOptimizer64) iterationEnds(timeStep float64) {}
+func (opt *AdamOptimizer64) triggerStopping(msg string, verbose bool) bool {
+	if !strings.EqualFold(opt.LRSchedule, "adaptive") {
+		if verbose {
+			fmt.Println(msg + " Stopping.")
+		}
+		return true
+	}
+	if opt.LearningRate <= 1e-6 {
+		if verbose {
+			fmt.Println(msg + " Learning rate too small. Stopping.")
+		}
+		return true
+	}
+	opt.LearningRateInit *= .8
+	if verbose {
+		fmt.Printf("%s Setting base learning rate to %f\n", msg, opt.LearningRateInit)
+	}
+	return false
+
+}
+
 func (opt *AdamOptimizer64) updateParams(grads []float64) {
 	if opt.t == 0 {
 		opt.ms = make([]float64, len(grads))
@@ -1228,7 +1249,7 @@ func ToDense64(m Matrix) General64 {
 
 // FromDense64 fills dst (mat.Mutable) with src (mat.Dense)
 func FromDense64(dst Mutable, dense General64) General64 {
-	if dst == Mutable(nil) {
+	if dst == nil {
 		return dense
 	}
 	src := dense.RawMatrix()

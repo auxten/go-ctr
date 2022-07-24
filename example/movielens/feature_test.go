@@ -12,14 +12,14 @@ import (
 )
 
 func TestFeatureEngineer(t *testing.T) {
-
 	var (
 		recSys = &RecSysImpl{}
 		model  rcmd.Predictor
 		err    error
 	)
+
+	log.SetLevel(log.DebugLevel)
 	Convey("feature engineering", t, func() {
-		log.SetLevel(log.DebugLevel)
 		model, err = rcmd.Train(recSys)
 		So(err, ShouldBeNil)
 	})
@@ -35,7 +35,7 @@ func TestFeatureEngineer(t *testing.T) {
 			{107, 1, 1.},
 			{107, 2, 1.},
 			{191, 39, 0.},
-			//{11, 1391, 0.},
+			{11, 1391, 0.},
 		}
 
 		var (
@@ -55,6 +55,35 @@ func TestFeatureEngineer(t *testing.T) {
 
 		rocAuc := metrics.ROCAUCScore(yTrue, yPred, "", nil)
 		fmt.Printf("rocAuc:%f\n", rocAuc)
-		So(rocAuc, ShouldBeGreaterThan, 0.9)
+		//So(rocAuc, ShouldBeGreaterThan, 0.7)
+	})
+
+	Convey("test set ROC AUC", t, func() {
+		testCount := 20836
+		rows, err := db.Query(
+			"SELECT userId, movieId, rating FROM ratings_test LIMIT ?", testCount)
+		So(err, ShouldBeNil)
+		var (
+			userId int
+			itemId int
+			rating float64
+			yTrue  = mat.NewDense(testCount, 1, nil)
+			yPred  = mat.NewDense(testCount, 1, nil)
+		)
+		for i := 0; rows.Next(); i++ {
+			err = rows.Scan(&userId, &itemId, &rating)
+			if err != nil {
+				t.Errorf("scan error: %v", err)
+			}
+			yTrue.Set(i, 0, BinarizeLabel(rating))
+			score, err := rcmd.Rank(model, userId, []int{itemId})
+			if err != nil {
+				t.Errorf("rank error: %v", err)
+			}
+			yPred.Set(i, 0, score[0].Score)
+		}
+		rocAuc := metrics.ROCAUCScore(yTrue, yPred, "", nil)
+		rowCount, _ := yTrue.Dims()
+		fmt.Printf("rocAuc on test set %d: %f\n", rowCount, rocAuc)
 	})
 }
