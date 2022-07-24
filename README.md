@@ -86,7 +86,7 @@ Search Embedding of:
 - Dataset: MovieLens 100k, 80% training data, 20% test data
 - Code: [example/movielens](example/movielens)
 - Training time: 28s
-- AUC: 0.744
+- AUC: 0.83
 
 # Q&A
 

@@ -116,17 +116,16 @@ func Train(recSys RecSys) (model Predictor, err error) {
 		yClass.Set(i, 0, sample.Response[0])
 	}
 	mlp := nn.NewMLPClassifier(
-		[]int{100, len(trainSample[0].Input)},
-		"logistic", "adam", 1e-5,
+		[]int{100},
+		"relu", "adam", 1e-5,
 	)
-	mlp.Shuffle = true
+	//mlp.Shuffle = true
 	mlp.Verbose = true
-	mlp.RandomState = base.NewLockedSource(1)
-	mlp.BatchSize = 100
-	mlp.MaxIter = 2000
+	//mlp.BatchSize = 200
+	mlp.MaxIter = 100
 	mlp.LearningRate = "adaptive"
 	mlp.LearningRateInit = .0025
-	mlp.NIterNoChange = 20
+	//mlp.NIterNoChange = 20
 
 	//start training
 	log.Infof("\nstart training with %d samples\n", sampleLen)
@@ -175,6 +174,49 @@ func Rank(recSys Predictor, userId int, itemIds []int) (itemScores []ItemScore, 
 		score := recSys.Predict(x, y)
 		itemScores[i] = ItemScore{itemId, score.At(0, 0)}
 	}
+	return
+}
+
+func BatchPredict(recSys Predictor, userAndItems [][2]int) (y *mat.Dense, err error) {
+	if preRanker, ok := recSys.(PreRanker); ok {
+		err = preRanker.PreRank()
+		if err != nil {
+			log.Errorf("pre rank error: %v", err)
+			return
+		}
+	}
+
+	y = mat.NewDense(len(userAndItems), 1, nil)
+	var x *mat.Dense
+	for i, userAndItem := range userAndItems {
+		userId := userAndItem[0]
+		itemId := userAndItem[1]
+		var (
+			userFeature, itemFeature Tensor
+		)
+		userFeature, err = recSys.GetUserFeature(userId)
+		if err != nil {
+			log.Errorf("get user feature error: %v", err)
+			continue
+		}
+		itemFeature, err = recSys.GetItemFeature(itemId)
+		if err != nil {
+			log.Errorf("get item feature error: %v", err)
+			continue
+		}
+		xSlice := utils.ConcatSlice(userFeature, itemFeature)
+		if i == 0 {
+			x = mat.NewDense(len(userAndItems), len(xSlice), nil)
+		}
+
+		_, xCol := x.Dims()
+		if len(xSlice) != xCol {
+			log.Errorf("x slice length %d != x col %d", len(xSlice), xCol)
+			return
+		}
+		x.SetRow(i, xSlice)
+	}
+	recSys.Predict(x, y)
 	return
 }
 

@@ -28,7 +28,7 @@ func TestEmbedding(t *testing.T) {
 		So(err, ShouldBeNil)
 		defer db.Close()
 		rows, err := db.Query(`select userId, movieId
-										from ratings r
+										from ratings_train r
 										where r.rating > 3.5
 										order by userId, timestamp`)
 		So(err, ShouldBeNil)
