@@ -11,20 +11,20 @@ To create a deep learning based recommendation system, you need to follow the st
 if you prefer `show me the code`, just go to [MovieLens Example](examples/movielens)
 
 1. Implement the `recommend.RecSys` interface including func below:
-    ```
+    ```golang
    GetUserFeature(int) (Tensor, error)
    GetItemFeature(int) (Tensor, error)
    SampleGenerator() (<-chan Sample, error)
    ```
 2. Call the functions to `Train` and `StartHttpApi`
 
-     ```
+     ```golang
     model, _ = recommend.Train(recSys)
     recommend.StartHttpApi(model, "/api/v1/recommend", ":8080")
     ```
 
 3. If you want better AUC with item embedding, you can implement the `recommend.ItemEmbedding` interface including func below:
-    ```
+    ```golang
     //ItemEmbedding is an interface used to generate item embedding with item2vec model
     //by just providing a behavior based item sequence.
     // Example: user liked items sequence, user bought items sequence, 
