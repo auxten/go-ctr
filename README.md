@@ -17,8 +17,9 @@ GOBIN=`pwd` go install github.com/auxten/edgeRec@latest && \
   ./edgeRec
 ```
 
-wait for the message shown: `Listening and serving HTTP on :8080`.
-then test the API in another terminal:
+Wait for the message shown: `Listening and serving HTTP on :8080`.
+
+Then test the API in another terminal:
 
 ```shell
 curl --header "Content-Type: application/json" \
@@ -26,6 +27,17 @@ curl --header "Content-Type: application/json" \
   --data '{"userId":107,"itemIdList":[1,2,39]}' \
   http://localhost:8080/api/v1/recommend
 ```
+Should get the response like this:
+
+```json
+{"itemScoreList":[
+  {"itemId":1,"score":0.7517360474797006},
+  {"itemId":2,"score":0.5240565619788571},
+  {"itemId":39,"score":0.38496231172036016}
+]}
+```
+
+So, with a higher score, user #107 may prefer movie #1 over #2 and #39.
 
 
 # Quick Start
