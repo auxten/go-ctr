@@ -9,12 +9,15 @@ Feature-Engineering & Training & Predict all in one Recommendation System that c
 You can run the MovieLens training and predict demo by:
 
 ```shell
+# download and unzip the SQLite DB file
 wget https://github.com/auxten/edgeRec/files/9176009/movielens.db.zip && \
   unzip movielens.db.zip
-# run the demo
-go run github.com/auxten/edgeRec
+# compile the edgeRec and put it in the current directory
+GOBIN=`pwd` go install github.com/auxten/edgeRec@latest && \
+  ./edgeRec
 ```
 
+wait for the message shown: `Listening and serving HTTP on :8080`.
 then test the API in another terminal:
 
 ```shell
