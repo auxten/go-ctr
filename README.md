@@ -4,11 +4,32 @@
 
 Feature-Engineering & Training & Predict all in one Recommendation System that can run on small server or edge device (Android/iOS/IoT device etc.)
 
+# Demo
+
+You can run the MovieLens training and predict demo by:
+
+```shell
+wget https://github.com/auxten/edgeRec/files/9176009/movielens.db.zip && \
+  unzip movielens.db.zip
+# run the demo
+go run github.com/auxten/edgeRec
+```
+
+then test the API in another terminal:
+
+```shell
+curl --header "Content-Type: application/json" \
+  --request POST \
+  --data '{"userId":107,"itemIdList":[1,2,39]}' \
+  http://localhost:8080/api/v1/recommend
+```
+
+
 # Quick Start
 
 To create a deep learning based recommendation system, you need to follow the steps below:
 
-if you prefer `show me the code`, just go to [MovieLens Example](examples/movielens)
+if you prefer `show me the code`, just go to [MovieLens Example](example/movielens)
 
 1. Implement the `recommend.RecSys` interface including func below:
     ```golang

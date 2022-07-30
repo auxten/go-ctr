@@ -1,13 +1,14 @@
 package main
 
 import (
+	"github.com/auxten/edgeRec/example/movielens"
 	rcmd "github.com/auxten/edgeRec/recommend"
 	log "github.com/sirupsen/logrus"
 )
 
 func main() {
 	var (
-		recSys = &RecSysImpl{}
+		recSys = &movielens.RecSysImpl{}
 		model  rcmd.Predictor
 		err    error
 	)

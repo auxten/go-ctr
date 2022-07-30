@@ -1,4 +1,4 @@
-package main
+package movielens
 
 import (
 	"fmt"

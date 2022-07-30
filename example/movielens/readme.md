@@ -5,7 +5,12 @@ Original Data: [MovieLens 100k](https://files.grouplens.org/datasets/movielens/m
 SQLite DB file:
 [movielens.db.zip](https://github.com/auxten/edgeRec/files/9176009/movielens.db.zip)
 
-To run the movielens demo just unzip the movielens.db.zip file and put the movielens.db file in the `example` dir.
+To run the tests, you need download the SQLite DB file and put it in the current directory.
+
+```shell
+# download and unzip the SQLite DB file
+wget https://github.com/auxten/edgeRec/files/9176009/movielens.db.zip && unzip movielens.db.zip
+```
 
 
 The table DDL:

@@ -1,4 +1,4 @@
-package main
+package movielens
 
 import (
 	"database/sql"
@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	DbPath    = "../movielens.db"
+	DbPath    = "movielens.db"
 	SampleCnt = 80000
 )
 
@@ -36,6 +36,7 @@ func init() {
 }
 
 type RecSysImpl struct {
+	DataPath   string
 	Neural     base.Predicter
 	mRatingMap map[int][2]float64
 }
