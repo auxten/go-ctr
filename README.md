@@ -159,5 +159,6 @@ To make this project work, quite a lot of code are copied and modified from the 
 
 # Papers related
 
+- [Deep Interest Network for Click-Through Rate Prediction](https://arxiv.org/abs/1706.06978)
 - [Document Embedding with Paragraph Vectors](https://arxiv.org/abs/1507.07998)
 - [EdgeRec: Recommender System on Edge in Mobile Taobao](https://arxiv.org/abs/2005.08416) // not very identical implementation
