@@ -69,7 +69,7 @@ if you prefer `show me the code`, just go to [MovieLens Example](example/moviele
         ItemSeqGenerator() (<-chan string, error)
     }
     ```
-   All you need to do is implement the functions of the yellow part:
+   All you need to do is implement the functions of the gray part:
    ![](art/edgerec.png)
 
 # Features
