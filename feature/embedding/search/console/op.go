@@ -14,11 +14,15 @@
 
 package console
 
+import (
+	"fmt"
+)
+
 type Operator func(float64, float64) float64
 
 func elementWise(v1, v2 []float64, op Operator) ([]float64, error) {
 	if len(v1) != len(v2) {
-		return nil, fmt.Errorf("Both lengths of vector must be the same, got %d and %d", len(v1), len(v2))
+		return nil, fmt.Errorf("both lengths of vector must be the same, got %d and %d", len(v1), len(v2))
 	}
 	v := make([]float64, len(v1))
 	for i := 0; i < len(v1); i++ {

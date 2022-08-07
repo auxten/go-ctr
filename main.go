@@ -8,9 +8,12 @@ import (
 
 func main() {
 	var (
-		recSys = &movielens.RecSysImpl{}
-		model  rcmd.Predictor
-		err    error
+		recSys = &movielens.RecSysImpl{
+			DataPath:  "movielens.db",
+			SampleCnt: 80000,
+		}
+		model rcmd.Predictor
+		err   error
 	)
 	log.SetLevel(log.DebugLevel)
 	model, err = rcmd.Train(recSys)

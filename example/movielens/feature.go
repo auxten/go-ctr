@@ -17,26 +17,26 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const (
-	DbPath    = "movielens.db"
-	SampleCnt = 80000
-)
-
 var (
+	dbOnce    sync.Once
 	db        *sql.DB
 	yearRegex = regexp.MustCompile(`\((\d{4})\)$`)
 )
 
-func init() {
-	var err error
-	db, err = sql.Open("sqlite3", DbPath)
-	if err != nil {
-		panic(err)
-	}
+func initDb(dbPath string) (err error) {
+	dbOnce.Do(func() {
+		db, err = sql.Open("sqlite3", dbPath)
+		if err != nil {
+			log.Errorf("failed to open db: %v", err)
+			return
+		}
+	})
+	return
 }
 
 type RecSysImpl struct {
 	DataPath   string
+	SampleCnt  int
 	Neural     base.Predicter
 	mRatingMap map[int][2]float64
 }
@@ -137,7 +137,6 @@ func (recSys *RecSysImpl) GetItemFeature(itemId int) (tensor rcmd.Tensor, err er
 		err = fmt.Errorf("itemId %d not found", itemId)
 		return
 	}
-	return
 }
 
 func (recSys *RecSysImpl) GetUserFeature(userId int) (tensor rcmd.Tensor, err error) {
@@ -215,7 +214,7 @@ func (recSys *RecSysImpl) SampleGenerator() (ret <-chan rcmd.Sample, err error) 
 		}()
 
 		rows, err = db.Query(
-			"SELECT userId, movieId, rating FROM ratings_train ORDER BY timestamp, userId ASC LIMIT ?", SampleCnt)
+			"SELECT userId, movieId, rating FROM ratings_train ORDER BY timestamp, userId ASC LIMIT ?", recSys.SampleCnt)
 		if err != nil {
 			log.Errorf("failed to query ratings: %v", err)
 			wg.Done()
@@ -250,6 +249,9 @@ func (recSys *RecSysImpl) SampleGenerator() (ret <-chan rcmd.Sample, err error) 
 }
 
 func (recSys *RecSysImpl) PreTrain() (err error) {
+	if err = initDb(recSys.DataPath); err != nil {
+		return
+	}
 	// get movie avg rating and rating count
 	var (
 		rows1 *sql.Rows

@@ -13,9 +13,12 @@ import (
 
 func TestFeatureEngineer(t *testing.T) {
 	var (
-		recSys = &RecSysImpl{}
-		model  rcmd.Predictor
-		err    error
+		recSys = &RecSysImpl{
+			DataPath:  "movielens.db",
+			SampleCnt: 80000,
+		}
+		model rcmd.Predictor
+		err   error
 	)
 
 	log.SetLevel(log.DebugLevel)
