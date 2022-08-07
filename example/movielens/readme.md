@@ -1,6 +1,6 @@
 # MovieLens Example
 
-Original Data: [MovieLens 100k](https://files.grouplens.org/datasets/movielens/ml-latest-small.zip)
+Original Data: [MovieLens 100k](https://grouplens.org/datasets/movielens/100k/)
 
 SQLite DB file:
 [movielens.db.zip](https://github.com/auxten/edgeRec/files/9176009/movielens.db.zip)
@@ -54,6 +54,8 @@ create table ratings_test as
 
 There is another way to split the MovieLens-20m dataset with userId that is described 
 in the [Deep Interest Network](https://arxiv.org/abs/1706.06978) paper.
+
+[MovieLens 20m](https://grouplens.org/datasets/movielens/20m/)
 
 Related SQL:
 ```sql
