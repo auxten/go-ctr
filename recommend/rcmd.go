@@ -9,7 +9,6 @@ import (
 	"github.com/auxten/edgeRec/feature/embedding/model"
 	"github.com/auxten/edgeRec/feature/embedding/model/word2vec"
 	"github.com/auxten/edgeRec/nn/base"
-	nn "github.com/auxten/edgeRec/nn/neural_network"
 	"github.com/auxten/edgeRec/ps"
 	"github.com/auxten/edgeRec/utils"
 	"github.com/karlseguin/ccache/v2"
@@ -63,8 +62,8 @@ type PreTrainer interface {
 	PreTrain() error
 }
 
-//ItemEmbedding is an interface used to generate item embedding with item2vec model
-//by just providing a behavior based item sequence.
+// ItemEmbedding is an interface used to generate item embedding with item2vec model
+// by just providing a behavior based item sequence.
 // Example: user liked items sequence, user bought items sequence, user viewed items sequence
 type ItemEmbedding interface {
 	ItemSeqGenerator() (<-chan string, error)
@@ -81,7 +80,7 @@ type Sample struct {
 	Label  float64 `json:"label"`
 }
 
-func Train(recSys RecSys) (model Predictor, err error) {
+func Train(recSys RecSys, mlp base.Fiter) (model Predictor, err error) {
 	rand.Seed(0)
 
 	if preTrain, ok := recSys.(PreTrainer); ok {
@@ -115,17 +114,6 @@ func Train(recSys RecSys) (model Predictor, err error) {
 	for i, sample := range trainSample {
 		yClass.Set(i, 0, sample.Response[0])
 	}
-	mlp := nn.NewMLPClassifier(
-		[]int{100},
-		"relu", "adam", 1e-5,
-	)
-	//mlp.Shuffle = true
-	mlp.Verbose = true
-	//mlp.BatchSize = 200
-	mlp.MaxIter = 100
-	mlp.LearningRate = "adaptive"
-	mlp.LearningRateInit = .0025
-	//mlp.NIterNoChange = 20
 
 	//start training
 	log.Infof("\nstart training with %d samples\n", sampleLen)
@@ -138,7 +126,7 @@ func Train(recSys RecSys) (model Predictor, err error) {
 	model = &modelImpl{
 		UserFeaturer: recSys,
 		ItemFeaturer: recSys,
-		Predicter:    mlp,
+		Predicter:    mlp.(base.Predicter),
 	}
 
 	return
@@ -164,7 +152,7 @@ func Rank(recSys Predictor, userId int, itemIds []int) (itemScores []ItemScore, 
 	for i, itemId := range itemIds {
 		itemFeature, err = recSys.GetItemFeature(itemId)
 		if err != nil {
-			log.Errorf("get item feature error: %v", err)
+			log.Infof("get item feature failed: %v", err)
 			return
 		}
 		xSlice := utils.ConcatSlice(userFeature, itemFeature)
@@ -201,7 +189,7 @@ func BatchPredict(recSys Predictor, userAndItems [][2]int) (y *mat.Dense, err er
 		}
 		itemFeature, err = recSys.GetItemFeature(itemId)
 		if err != nil {
-			log.Errorf("get item feature error: %v", err)
+			log.Infof("get item feature failed: %v", err)
 			continue
 		}
 		xSlice := utils.ConcatSlice(userFeature, itemFeature)

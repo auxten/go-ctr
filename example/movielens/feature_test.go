@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/auxten/edgeRec/nn/metrics"
+	nn "github.com/auxten/edgeRec/nn/neural_network"
 	rcmd "github.com/auxten/edgeRec/recommend"
 	log "github.com/sirupsen/logrus"
 	. "github.com/smartystreets/goconvey/convey"
@@ -20,10 +21,18 @@ func TestFeatureEngineer(t *testing.T) {
 		model rcmd.Predictor
 		err   error
 	)
+	fiter := nn.NewMLPClassifier(
+		[]int{100},
+		"relu", "adam", 1e-5,
+	)
+	fiter.Verbose = true
+	fiter.MaxIter = 100
+	fiter.LearningRate = "adaptive"
+	fiter.LearningRateInit = .0025
 
 	log.SetLevel(log.DebugLevel)
 	Convey("feature engineering", t, func() {
-		model, err = rcmd.Train(recSys)
+		model, err = rcmd.Train(recSys, fiter)
 		So(err, ShouldBeNil)
 	})
 
