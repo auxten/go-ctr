@@ -19,8 +19,8 @@ import (
 const (
 	ItemEmbDim           = 10
 	ItemEmbWindow        = 5
-	userFeatureCacheSize = 100000
-	itemFeatureCacheSize = 1000000
+	userFeatureCacheSize = 200000
+	itemFeatureCacheSize = 2000000
 )
 
 var (

@@ -176,7 +176,7 @@ func (recSys *RecSysImpl) GetUserFeature(userId int) (tensor rcmd.Tensor, err er
 	// to make it easy to test AUC. In a real case, this will not cause time travel.
 	rows2, err = db.Query(`select avg(rating) as avgRating, 
 						   count(rating) cntRating
-					from ratings where userId = ?`, userId)
+					from ratings_train where userId = ?`, userId)
 	if err != nil {
 		log.Errorf("failed to query ratings: %v", err)
 		return
@@ -198,7 +198,7 @@ func genreFeature(genre string) (tensor rcmd.Tensor) {
 }
 
 func (recSys *RecSysImpl) SampleGenerator() (ret <-chan rcmd.Sample, err error) {
-	sampleCh := make(chan rcmd.Sample)
+	sampleCh := make(chan rcmd.Sample, 10000)
 	var (
 		wg sync.WaitGroup
 	)
@@ -257,7 +257,7 @@ func (recSys *RecSysImpl) PreTrain() (err error) {
 		rows1 *sql.Rows
 	)
 	rows1, err = db.Query(`select movieId, avg(rating) avg_r, count(rating) cnt_r
-                    from ratings
+                    from ratings_train
                     group by movieId`)
 	if err != nil {
 		log.Errorf("failed to query ratings: %v", err)
