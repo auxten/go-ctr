@@ -37,7 +37,7 @@ Should get the response like this:
 ]}
 ```
 
-So, with a higher score, user #107 may prefer movie #1 over #2 and #39.
+So, with a higher score, user #108 may prefer movie #1 over #2 and #39.
 
 
 # Quick Start
