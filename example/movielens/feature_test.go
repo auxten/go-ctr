@@ -1,6 +1,7 @@
 package movielens
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -16,7 +17,7 @@ func TestFeatureEngineer(t *testing.T) {
 	var (
 		recSys = &RecSysImpl{
 			DataPath:  "movielens.db",
-			SampleCnt: 80000,
+			SampleCnt: 79948,
 		}
 		model rcmd.Predictor
 		err   error
@@ -30,9 +31,10 @@ func TestFeatureEngineer(t *testing.T) {
 	fiter.LearningRate = "adaptive"
 	fiter.LearningRateInit = .0025
 
+	trainCtx := context.Background()
 	log.SetLevel(log.DebugLevel)
 	Convey("feature engineering", t, func() {
-		model, err = rcmd.Train(recSys, fiter)
+		model, err = rcmd.Train(trainCtx, recSys, fiter)
 		So(err, ShouldBeNil)
 	})
 
@@ -54,8 +56,9 @@ func TestFeatureEngineer(t *testing.T) {
 			yTrue = mat.NewDense(len(testData), 1, nil)
 			yPred = mat.NewDense(len(testData), 1, nil)
 		)
+		rankCtx := context.Background()
 		for i, test := range testData {
-			score, err := rcmd.Rank(model, test.userId, []int{test.itemId})
+			score, err := rcmd.Rank(rankCtx, model, test.userId, []int{test.itemId})
 			So(err, ShouldBeNil)
 
 			fmt.Printf("userId:%d, itemId:%d, expected:%f, pred:%f\n",
@@ -70,7 +73,7 @@ func TestFeatureEngineer(t *testing.T) {
 	})
 
 	Convey("test set ROC AUC", t, func() {
-		testCount := 20000
+		testCount := 20888
 		rows, err := db.Query(
 			"SELECT userId, movieId, rating FROM ratings_test ORDER BY timestamp, userId ASC LIMIT ?", testCount)
 		So(err, ShouldBeNil)
@@ -89,7 +92,8 @@ func TestFeatureEngineer(t *testing.T) {
 			yTrue.Set(i, 0, BinarizeLabel(rating))
 			userAndItems = append(userAndItems, [2]int{userId, itemId})
 		}
-		yPred, err := rcmd.BatchPredict(model, userAndItems)
+		batchPredictCtx := context.Background()
+		yPred, err := rcmd.BatchPredict(batchPredictCtx, model, userAndItems)
 		So(err, ShouldBeNil)
 		rocAuc := metrics.ROCAUCScore(yTrue, yPred, "", nil)
 		rowCount, _ := yTrue.Dims()

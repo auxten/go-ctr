@@ -1,6 +1,7 @@
 package movielens
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"math"
@@ -41,7 +42,7 @@ type RecSysImpl struct {
 	mRatingMap map[int][2]float64
 }
 
-func (recSys *RecSysImpl) ItemSeqGenerator() (ret <-chan string, err error) {
+func (recSys *RecSysImpl) ItemSeqGenerator(ctx context.Context) (ret <-chan string, err error) {
 	var (
 		wg sync.WaitGroup
 	)
@@ -56,6 +57,7 @@ func (recSys *RecSysImpl) ItemSeqGenerator() (ret <-chan string, err error) {
 			log.Debugf("item seq generator finished: %d", i)
 			close(ch)
 		}()
+		// predict must use the same embedding as train
 		rows, err = db.Query("SELECT movieId FROM ratings_train r WHERE r.rating > 3.5 order by userId, timestamp")
 		if err != nil {
 			log.Errorf("failed to query ratings: %v", err)
@@ -80,7 +82,7 @@ func (recSys *RecSysImpl) ItemSeqGenerator() (ret <-chan string, err error) {
 	return
 }
 
-func (recSys *RecSysImpl) GetItemFeature(itemId int) (tensor rcmd.Tensor, err error) {
+func (recSys *RecSysImpl) GetItemFeature(ctx context.Context, itemId int) (tensor rcmd.Tensor, err error) {
 	// get movie avg rating and rating count
 	var (
 		rows *sql.Rows
@@ -139,17 +141,29 @@ func (recSys *RecSysImpl) GetItemFeature(itemId int) (tensor rcmd.Tensor, err er
 	}
 }
 
-func (recSys *RecSysImpl) GetUserFeature(userId int) (tensor rcmd.Tensor, err error) {
+func (recSys *RecSysImpl) GetUserFeature(ctx context.Context, userId int) (tensor rcmd.Tensor, err error) {
 	var (
+		tableName        string
 		rows, rows2      *sql.Rows
 		genres           string
 		avgRating        float64
 		cntRating        int
 		top5GenresTensor [50]float64
 	)
+	//get stage value from ctx
+	stage := ctx.Value(rcmd.StageKey).(rcmd.Stage)
+	switch stage {
+	case rcmd.TrainStage:
+		tableName = "ratings_train"
+	case rcmd.PredictStage:
+		tableName = "ratings_test"
+	default:
+		panic("unknown stage")
+	}
+
 	rows, err = db.Query(`select 
                            group_concat(genres) as ugenres
-                    from ratings_train r2
+                    from `+tableName+` r2
                              left join movies t2 on r2.movieId = t2.movieId
                     where userId = ? and
                     		r2.rating > 3.5
@@ -172,11 +186,9 @@ func (recSys *RecSysImpl) GetUserFeature(userId int) (tensor rcmd.Tensor, err er
 		copy(top5GenresTensor[i*10:], genreFeature(genre.Key))
 	}
 
-	// Theoretically, user feature should select from ratings_train, but we use ratings
-	// to make it easy to test AUC. In a real case, this will not cause time travel.
 	rows2, err = db.Query(`select avg(rating) as avgRating, 
 						   count(rating) cntRating
-					from ratings_train where userId = ?`, userId)
+					from `+tableName+` where userId = ?`, userId)
 	if err != nil {
 		log.Errorf("failed to query ratings: %v", err)
 		return
@@ -197,7 +209,7 @@ func genreFeature(genre string) (tensor rcmd.Tensor) {
 	return feature.HashOneHot([]byte(genre), 10)
 }
 
-func (recSys *RecSysImpl) SampleGenerator() (ret <-chan rcmd.Sample, err error) {
+func (recSys *RecSysImpl) SampleGenerator(_ context.Context) (ret <-chan rcmd.Sample, err error) {
 	sampleCh := make(chan rcmd.Sample, 10000)
 	var (
 		wg sync.WaitGroup
@@ -248,7 +260,7 @@ func (recSys *RecSysImpl) SampleGenerator() (ret <-chan rcmd.Sample, err error) 
 	return
 }
 
-func (recSys *RecSysImpl) PreTrain() (err error) {
+func (recSys *RecSysImpl) PreTrain(ctx context.Context) (err error) {
 	if err = initDb(recSys.DataPath); err != nil {
 		return
 	}

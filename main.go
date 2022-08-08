@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+
 	"github.com/auxten/edgeRec/example/movielens"
 	nn "github.com/auxten/edgeRec/nn/neural_network"
 	rcmd "github.com/auxten/edgeRec/recommend"
@@ -28,7 +30,8 @@ func main() {
 	// fiter.LearningRate = "adaptive"
 	// fiter.LearningRateInit = .0025
 
-	model, err = rcmd.Train(recSys, fiter)
+	trainCtx := context.Background()
+	model, err = rcmd.Train(trainCtx, recSys, fiter)
 	if err != nil {
 		log.Fatal(err)
 	}

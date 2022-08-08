@@ -10,7 +10,7 @@ You can run the MovieLens training and predict demo by:
 
 ```shell
 # download and unzip the SQLite DB file
-wget https://github.com/auxten/edgeRec/files/9176009/movielens.db.zip && \
+wget https://github.com/auxten/edgeRec/files/9283279/movielens.db.zip && \
   unzip movielens.db.zip
 # compile the edgeRec and put it in the current directory
 GOBIN=`pwd` go install github.com/auxten/edgeRec@latest && \
@@ -24,7 +24,7 @@ Then test the API in another terminal:
 ```shell
 curl --header "Content-Type: application/json" \
   --request POST \
-  --data '{"userId":107,"itemIdList":[1,2,39]}' \
+  --data '{"userId":108,"itemIdList":[1,2,39]}' \
   http://localhost:8080/api/v1/recommend
 ```
 Should get the response like this:
@@ -48,9 +48,9 @@ if you prefer `show me the code`, just go to [MovieLens Example](example/moviele
 
 1. Implement the `recommend.RecSys` interface including func below:
     ```golang
-   GetUserFeature(int) (Tensor, error)
-   GetItemFeature(int) (Tensor, error)
-   SampleGenerator() (<-chan Sample, error)
+   GetUserFeature(context.Context, int) (Tensor, error)
+   GetItemFeature(context.Context, int) (Tensor, error)
+   SampleGenerator(context.Context) (<-chan Sample, error)
    ```
 2. Call the functions to `Train` and `StartHttpApi`
 
@@ -123,10 +123,10 @@ Search Embedding of:
 
 ## Movie Recommend Performance
 
-- Dataset: MovieLens 100k, 80% training data, 20% test data
+- Dataset: MovieLens 100k, split by [80%+20% userId randomly](example/movielens/readme.md)
 - Code: [example/movielens](example/movielens)
 - Training time: 28s
-- AUC: 0.83
+- AUC: 0.782
 
 # Q&A
 

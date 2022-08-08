@@ -36,7 +36,8 @@ func StartHttpApi(predict Predictor, path string, addr string) (err error) {
 			return
 		} else {
 			resp := RecApiResponse{}
-			scores, err := Rank(predict, req.UserId, req.ItemIdList)
+			// get features in request from gin Context
+			scores, err := Rank(c, predict, req.UserId, req.ItemIdList)
 			if err != nil {
 				c.JSON(500, gin.H{"error": err.Error()})
 				return

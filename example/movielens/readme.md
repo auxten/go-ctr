@@ -3,51 +3,52 @@
 Original Data: [MovieLens 100k](https://grouplens.org/datasets/movielens/100k/)
 
 SQLite DB file:
-[movielens.db.zip](https://github.com/auxten/edgeRec/files/9176009/movielens.db.zip)
+[movielens.db.zip](https://github.com/auxten/edgeRec/files/9283279/movielens.db.zip)
 
 To run the tests, you need download the SQLite DB file and put it in the current directory.
 
 ```shell
 # download and unzip the SQLite DB file
-wget https://github.com/auxten/edgeRec/files/9176009/movielens.db.zip && unzip movielens.db.zip
+wget https://github.com/auxten/edgeRec/files/9283279/movielens.db.zip && unzip movielens.db.zip
 ```
 
-
-The table DDL:
-```
-
-Table DDL:
+SQL that split training set and test set by 80% and 20% user:
 ```sql
-create table movies
-(
-    movieId INTEGER,
-    title   TEXT,
-    genres  TEXT
-);
 
-create table ratings
-(
-    userId INTEGER,
-    movieId INTEGER,
-    rating FLOAT,
-    timestamp INTEGER
-);
+-- import data from csv, do it with any tool
 
-create table tags
-(
-    userId    INTEGER,
-    movieId   INTEGER,
-    tag       TEXT,
-    timestamp INTEGER
-);
-```
+select count(distinct userId) from ratings; -- 610 users
 
-SQL that split training set and test set by 80% and 20%:
-```sql
-create table ratings_train as 
-    select * from ratings order by timestamp asc limit 80000;
-create table ratings_test as 
-    select * from ratings order by timestamp asc limit 80000, 100836;
+create table user as select distinct userId, 0 as is_train  from ratings;
+
+-- choose 80% random user as train user
+update user
+set is_train = 1
+where userId in
+      (SELECT userId
+       FROM (select distinct userId from ratings)
+       ORDER BY RANDOM()
+       LIMIT 488);
+
+select count(*) from user where is_train != 1;
+
+-- split train and test set of movielens ratings
+create table ratings_train as
+select r.userId, movieId, rating, timestamp
+from ratings r
+         left join user u on r.userId = u.userId
+where is_train = 1;
+create table ratings_test as
+select r.userId, movieId, rating, timestamp
+from ratings r
+         left join user u on r.userId = u.userId
+where is_train = 0;
+
+select count(*) from ratings_train;
+select count(*) from ratings_test;
+select count(*) from ratings;
+
+select count(distinct movieId) from movies
 ```
 
 ## The DIN way to split dataset

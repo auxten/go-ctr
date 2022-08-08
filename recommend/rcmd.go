@@ -1,6 +1,7 @@
 package recommend
 
 import (
+	"context"
 	"math/rand"
 	"strconv"
 	"time"
@@ -17,6 +18,7 @@ import (
 )
 
 const (
+	StageKey             = "stage"
 	ItemEmbDim           = 10
 	ItemEmbWindow        = 5
 	userFeatureCacheSize = 200000
@@ -29,6 +31,13 @@ var (
 )
 
 type Tensor []float64
+
+type Stage int
+
+const (
+	TrainStage Stage = iota
+	PredictStage
+)
 
 type RecSys interface {
 	UserFeaturer
@@ -43,30 +52,30 @@ type Predictor interface {
 }
 
 type Trainer interface {
-	SampleGenerator() (<-chan Sample, error)
+	SampleGenerator(context.Context) (<-chan Sample, error)
 }
 
 type UserFeaturer interface {
-	GetUserFeature(int) (Tensor, error)
+	GetUserFeature(context.Context, int) (Tensor, error)
 }
 
 type ItemFeaturer interface {
-	GetItemFeature(int) (Tensor, error)
+	GetItemFeature(context.Context, int) (Tensor, error)
 }
 
 type PreRanker interface {
-	PreRank() error
+	PreRank(context.Context) error
 }
 
 type PreTrainer interface {
-	PreTrain() error
+	PreTrain(context.Context) error
 }
 
 // ItemEmbedding is an interface used to generate item embedding with item2vec model
 // by just providing a behavior based item sequence.
 // Example: user liked items sequence, user bought items sequence, user viewed items sequence
 type ItemEmbedding interface {
-	ItemSeqGenerator() (<-chan string, error)
+	ItemSeqGenerator(context.Context) (<-chan string, error)
 }
 
 type ItemScore struct {
@@ -80,11 +89,12 @@ type Sample struct {
 	Label  float64 `json:"label"`
 }
 
-func Train(recSys RecSys, mlp base.Fiter) (model Predictor, err error) {
+func Train(ctx context.Context, recSys RecSys, mlp base.Fiter) (model Predictor, err error) {
 	rand.Seed(0)
+	ctx = context.WithValue(ctx, StageKey, TrainStage)
 
 	if preTrain, ok := recSys.(PreTrainer); ok {
-		err = preTrain.PreTrain()
+		err = preTrain.PreTrain(ctx)
 		if err != nil {
 			log.Errorf("pre train error: %v", err)
 			return
@@ -92,7 +102,7 @@ func Train(recSys RecSys, mlp base.Fiter) (model Predictor, err error) {
 	}
 
 	if itemEbd, ok := recSys.(ItemEmbedding); ok {
-		itemEmbeddingModel, err = GetItemEmbeddingModelFromUb(itemEbd)
+		itemEmbeddingModel, err = GetItemEmbeddingModelFromUb(ctx, itemEbd)
 		if err != nil {
 			log.Errorf("get item embedding model error: %v", err)
 			return
@@ -104,7 +114,7 @@ func Train(recSys RecSys, mlp base.Fiter) (model Predictor, err error) {
 		}
 	}
 
-	trainSample, err := GetSample(recSys)
+	trainSample, err := GetSample(recSys, ctx)
 	sampleLen := len(trainSample)
 	sampleDense := mat.NewDense(sampleLen, len(trainSample[0].Input), nil)
 	for i, sample := range trainSample {
@@ -132,9 +142,10 @@ func Train(recSys RecSys, mlp base.Fiter) (model Predictor, err error) {
 	return
 }
 
-func Rank(recSys Predictor, userId int, itemIds []int) (itemScores []ItemScore, err error) {
+func Rank(ctx context.Context, recSys Predictor, userId int, itemIds []int) (itemScores []ItemScore, err error) {
+	ctx = context.WithValue(ctx, StageKey, PredictStage)
 	if preRanker, ok := recSys.(PreRanker); ok {
-		err = preRanker.PreRank()
+		err = preRanker.PreRank(ctx)
 		if err != nil {
 			log.Errorf("pre rank error: %v", err)
 			return
@@ -144,13 +155,13 @@ func Rank(recSys Predictor, userId int, itemIds []int) (itemScores []ItemScore, 
 		userFeature, itemFeature Tensor
 	)
 	itemScores = make([]ItemScore, len(itemIds))
-	userFeature, err = recSys.GetUserFeature(userId)
+	userFeature, err = recSys.GetUserFeature(ctx, userId)
 	if err != nil {
 		log.Errorf("get user feature error: %v", err)
 		return
 	}
 	for i, itemId := range itemIds {
-		itemFeature, err = recSys.GetItemFeature(itemId)
+		itemFeature, err = recSys.GetItemFeature(ctx, itemId)
 		if err != nil {
 			log.Infof("get item feature failed: %v", err)
 			return
@@ -165,9 +176,10 @@ func Rank(recSys Predictor, userId int, itemIds []int) (itemScores []ItemScore, 
 	return
 }
 
-func BatchPredict(recSys Predictor, userAndItems [][2]int) (y *mat.Dense, err error) {
+func BatchPredict(ctx context.Context, recSys Predictor, userAndItems [][2]int) (y *mat.Dense, err error) {
+	ctx = context.WithValue(ctx, StageKey, PredictStage)
 	if preRanker, ok := recSys.(PreRanker); ok {
-		err = preRanker.PreRank()
+		err = preRanker.PreRank(ctx)
 		if err != nil {
 			log.Errorf("pre rank error: %v", err)
 			return
@@ -182,12 +194,12 @@ func BatchPredict(recSys Predictor, userAndItems [][2]int) (y *mat.Dense, err er
 		var (
 			userFeature, itemFeature Tensor
 		)
-		userFeature, err = recSys.GetUserFeature(userId)
+		userFeature, err = recSys.GetUserFeature(ctx, userId)
 		if err != nil {
 			log.Errorf("get user feature error: %v", err)
 			continue
 		}
-		itemFeature, err = recSys.GetItemFeature(itemId)
+		itemFeature, err = recSys.GetItemFeature(ctx, itemId)
 		if err != nil {
 			log.Infof("get item feature failed: %v", err)
 			continue
@@ -208,7 +220,7 @@ func BatchPredict(recSys Predictor, userAndItems [][2]int) (y *mat.Dense, err er
 	return
 }
 
-func GetSample(recSys RecSys) (sample ps.Samples, err error) {
+func GetSample(recSys RecSys, ctx context.Context) (sample ps.Samples, err error) {
 	var (
 		userFeatureWidth, itemFeatureWidth int
 		userFeatureCache                   *ccache.Cache
@@ -225,7 +237,7 @@ func GetSample(recSys RecSys) (sample ps.Samples, err error) {
 	if !ok {
 		panic("sample generator not implemented")
 	}
-	sampleCh, err := sampleGen.SampleGenerator()
+	sampleCh, err := sampleGen.SampleGenerator(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -236,7 +248,7 @@ func GetSample(recSys RecSys) (sample ps.Samples, err error) {
 		)
 		userIdStr := strconv.Itoa(s.UserId)
 		user, err = userFeatureCache.Fetch(userIdStr, time.Hour*24, func() (cItem interface{}, err error) {
-			cItem, err = recSys.GetUserFeature(s.UserId)
+			cItem, err = recSys.GetUserFeature(ctx, s.UserId)
 			return
 		})
 		if err != nil {
@@ -254,7 +266,7 @@ func GetSample(recSys RecSys) (sample ps.Samples, err error) {
 
 		itemIdStr := strconv.Itoa(s.ItemId)
 		item, err = itemFeatureCache.Fetch(itemIdStr, time.Hour*24, func() (cItem interface{}, err error) {
-			cItem, err = recSys.GetItemFeature(s.ItemId)
+			cItem, err = recSys.GetItemFeature(ctx, s.ItemId)
 			return
 		})
 		if err != nil {
@@ -289,8 +301,8 @@ func GetSample(recSys RecSys) (sample ps.Samples, err error) {
 	return
 }
 
-func GetItemEmbeddingModelFromUb(iSeq ItemEmbedding) (mod model.Model, err error) {
-	itemSeq, err := iSeq.ItemSeqGenerator()
+func GetItemEmbeddingModelFromUb(ctx context.Context, iSeq ItemEmbedding) (mod model.Model, err error) {
+	itemSeq, err := iSeq.ItemSeqGenerator(ctx)
 	if err != nil {
 		return
 	}
