@@ -29,7 +29,7 @@ create table ratings
 (
     userId INTEGER,
     movieId INTEGER,
-    rating INTEGER,
+    rating FLOAT,
     timestamp INTEGER
 );
 
@@ -70,7 +70,7 @@ create table ratings
 (
     userId INTEGER,
     movieId INTEGER,
-    rating INTEGER,
+    rating FLOAT,
     timestamp INTEGER
 );
 

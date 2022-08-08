@@ -70,7 +70,7 @@ func TestFeatureEngineer(t *testing.T) {
 	})
 
 	Convey("test set ROC AUC", t, func() {
-		testCount := 20836
+		testCount := 20000
 		rows, err := db.Query(
 			"SELECT userId, movieId, rating FROM ratings_test ORDER BY timestamp, userId ASC LIMIT ?", testCount)
 		So(err, ShouldBeNil)
