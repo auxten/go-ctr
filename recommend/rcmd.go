@@ -78,6 +78,15 @@ type ItemEmbedding interface {
 	ItemSeqGenerator(context.Context) (<-chan string, error)
 }
 
+// UserBehavior is an interface used to enable DIN(Deep Interest Network) model training and
+// predict
+type UserBehavior interface {
+	// GetUserBehaviorEmbedding returns user behavior embedding sequence.
+	// Example: user liked items sequence, user bought items sequence, user viewed items sequence
+	// and the items are represented by item embedding Tensor.
+	GetUserBehaviorEmbedding(userId int, maxLen int) ([]Tensor, error)
+}
+
 type ItemScore struct {
 	ItemId int     `json:"itemId"`
 	Score  float64 `json:"score"`
