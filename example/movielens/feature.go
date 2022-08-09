@@ -146,8 +146,8 @@ func (recSys *RecSysImpl) GetUserFeature(ctx context.Context, userId int) (tenso
 		tableName        string
 		rows, rows2      *sql.Rows
 		genres           string
-		avgRating        float64
-		cntRating        int
+		avgRating        sql.NullFloat64
+		cntRating        sql.NullFloat64
 		top5GenresTensor [50]float64
 	)
 	//get stage value from ctx
@@ -201,7 +201,7 @@ func (recSys *RecSysImpl) GetUserFeature(ctx context.Context, userId int) (tenso
 		}
 	}
 
-	tensor = utils.ConcatSlice(rcmd.Tensor{avgRating / 5., float64(cntRating) / 100.}, top5GenresTensor[:])
+	tensor = utils.ConcatSlice(rcmd.Tensor{avgRating.Float64 / 5., cntRating.Float64 / 100.}, top5GenresTensor[:])
 	return
 }
 
