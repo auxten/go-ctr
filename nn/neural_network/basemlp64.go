@@ -324,7 +324,7 @@ func (mlp *BaseMultilayerPerceptron64) computeLossGrad(layer, NSamples int, acti
 	// coefGrads[layer] += (self.alpha * self.coefs_[layer])
 	// coefGrads[layer] /= nSamples
 	gemm64(blas.Trans, blas.NoTrans, 1/float64(NSamples), activations[layer], deltas[layer], 0, coefGrads[layer])
-	axpy64(len(coefGrads[layer].Data), mlp.Alpha/float64(NSamples), mlp.Coefs[layer].Data, coefGrads[layer].Data)
+	Axpy64(len(coefGrads[layer].Data), mlp.Alpha/float64(NSamples), mlp.Coefs[layer].Data, coefGrads[layer].Data)
 	// interceptGrads[layer] = np.mean(deltas[layer], 0)
 	matRowMean64(deltas[layer], interceptGrads[layer])
 }
@@ -785,7 +785,7 @@ func (mlp *BaseMultilayerPerceptron64) fitStochastic(X, y blas64General, activat
 		}
 		for it := 0; it < mlp.MaxIter; it++ {
 			if mlp.Shuffle {
-				rndShuffle(nSamples, indexedXY{idx: sort.IntSlice(idx), X: general64FastSwap(X), Y: general64FastSwap(y)}.Swap)
+				rndShuffle(nSamples, IndexedXY{Idx: sort.IntSlice(idx), X: General64FastSwap(X), Y: General64FastSwap(y)}.Swap)
 			}
 			accumulatedLoss := float64(0.0)
 			for batch := [2]int{0, batchSize}; batch[0] < nSamples-testSize; batch = [2]int{batch[1], batch[1] + batchSize} {
@@ -852,7 +852,7 @@ func (mlp *BaseMultilayerPerceptron64) fitStochastic(X, y blas64General, activat
 		copy(mlp.packedParameters, mlp.bestParameters)
 	}
 	if mlp.Shuffle {
-		sort.Sort(indexedXY{idx: sort.IntSlice(idx), X: general64FastSwap(X), Y: general64FastSwap(y)})
+		sort.Sort(IndexedXY{Idx: sort.IntSlice(idx), X: General64FastSwap(X), Y: General64FastSwap(y)})
 	}
 }
 
@@ -1199,7 +1199,7 @@ func (mlp *BaseMultilayerPerceptron64) Unmarshal(buf []byte) error {
 			}
 			b64coefs := make([]blas64General, len(c64))
 			for i := range b64coefs {
-				b64coefs[i] = blas64FromInterface(c64[i])
+				b64coefs[i] = Blas64FromInterface(c64[i])
 			}
 			mlp.NLayers = len(b64coefs) + 1
 			mlp.HiddenLayerSizes = make([]int, mlp.NLayers-2)
@@ -1217,7 +1217,7 @@ func (mlp *BaseMultilayerPerceptron64) Unmarshal(buf []byte) error {
 			mlp.initialize(mlp.NOutputs, layerUnits, true, mlp.NOutputs > 1)
 
 			for i := 0; i < mlp.NLayers-1; i++ {
-				intercept64 := floats64FromInterface(intercepts2[i])
+				intercept64 := Floats64FromInterface(intercepts2[i])
 				for off := 0; off < len(mlp.Intercepts[i]); off++ {
 					mlp.Intercepts[i][off] = float64(intercept64[off])
 				}

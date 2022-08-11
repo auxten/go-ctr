@@ -221,7 +221,7 @@ func (g general64FastSwapT) Swap(i, j int) {
 	copy(g.Data[ipos:ipos+g.Cols], g.Data[jpos:jpos+g.Cols])
 	copy(g.Data[jpos:jpos+g.Cols], g.tmp)
 }
-func general64FastSwap(g blas64.General) general64FastSwapT {
+func General64FastSwap(g blas64.General) general64FastSwapT {
 	return general64FastSwapT{General64(g), make([]float64, g.Cols)}
 }
 

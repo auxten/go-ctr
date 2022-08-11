@@ -1,19 +1,18 @@
-package neuralnetwork
+package din
 
 import (
 	"encoding/json"
 	"fmt"
 	"log"
 	"reflect"
-	"runtime"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
-	"gonum.org/v1/gonum/blas/blas32"
+	"gonum.org/v1/gonum/blas/blas64"
 
 	"github.com/auxten/edgeRec/nn/base"
+	nn "github.com/auxten/edgeRec/nn/neural_network"
 
 	"golang.org/x/exp/rand"
 	"gonum.org/v1/gonum/blas"
@@ -21,78 +20,78 @@ import (
 	"gonum.org/v1/gonum/optimize"
 )
 
-// BaseMultilayerPerceptron32 closely matches sklearn/neural_network/multilayer_perceptron.py
-type BaseMultilayerPerceptron32 struct {
+// DeepInterestNetwork is modified from neural_network.BaseMultilayerPerceptron64
+type DeepInterestNetwork struct {
 	Activation         string  `json:"activation"`
 	Solver             string  `json:"solver"`
-	Alpha              float32 `json:"alpha"`
-	WeightDecay        float32 `json:"weight_decay"`
+	Alpha              float64 `json:"alpha"`
+	WeightDecay        float64 `json:"weight_decay"`
 	BatchSize          int     `json:"batch_size"`
 	BatchNormalize     bool
 	LearningRate       string           `json:"learning_rate"`
-	LearningRateInit   float32          `json:"learning_rate_init"`
-	PowerT             float32          `json:"power_t"`
+	LearningRateInit   float64          `json:"learning_rate_init"`
+	PowerT             float64          `json:"power_t"`
 	MaxIter            int              `json:"max_iter"`
 	LossFuncName       string           `json:"loss_func_name"`
 	HiddenLayerSizes   []int            `json:"hidden_layer_sizes"`
 	Shuffle            bool             `json:"shuffle"`
 	RandomState        base.RandomState `json:"random_state"`
-	Tol                float32          `json:"tol"`
+	Tol                float64          `json:"tol"`
 	Verbose            bool             `json:"verbose"`
 	WarmStart          bool             `json:"warm_start"`
-	Momentum           float32          `json:"momentum"`
+	Momentum           float64          `json:"momentum"`
 	NesterovsMomentum  bool             `json:"nesterovs_momentum"`
 	EarlyStopping      bool             `json:"early_stopping"`
-	ValidationFraction float32          `json:"validation_fraction"`
-	Beta1              float32          `json:"beta_1"`
-	Beta2              float32          `json:"beta_2"`
-	Epsilon            float32          `json:"epsilon"`
+	ValidationFraction float64          `json:"validation_fraction"`
+	Beta1              float64          `json:"beta_1"`
+	Beta2              float64          `json:"beta_2"`
+	Epsilon            float64          `json:"epsilon"`
 	NIterNoChange      int              `json:"n_iter_no_change"`
 
 	// Outputs
 	NLayers       int
 	NIter         int
 	NOutputs      int
-	Intercepts    [][]float32     `json:"intercepts_"`
-	Coefs         []blas32General `json:"coefs_"`
-	OutActivation string          `json:"out_activation_"`
-	Loss          float32
+	Intercepts    [][]float64      `json:"intercepts_"`
+	Coefs         []blas64.General `json:"coefs_"`
+	OutActivation string           `json:"out_activation_"`
+	Loss          float64
 
 	// internal
 	t                   int
-	LossCurve           []float32
-	ValidationScores    []float32
-	BestValidationScore float32
-	BestLoss            float32
+	LossCurve           []float64
+	ValidationScores    []float64
+	BestValidationScore float64
+	BestLoss            float64
 	NoImprovementCount  int
-	optimizer           Optimizer32
-	packedParameters    []float32
-	packedGrads         []float32 // packedGrads allow tests to check gradients
-	bestParameters      []float32
-	batchNorm           [][]float32
-	lb                  *LabelBinarizer32
+	optimizer           Optimizer64
+	packedParameters    []float64
+	packedGrads         []float64 // packedGrads allow tests to check gradients
+	bestParameters      []float64
+	batchNorm           [][]float64
+	lb                  *LabelBinarizer64
 	// beforeMinimize allow test to set weights
 	beforeMinimize func(optimize.Problem, []float64)
 }
 
-// Activations32 is a map containing the inplace_activation functions
-var Activations32 = map[string]func(z blas32General){
-	"identity": func(z blas32General) {},
-	"logistic": func(z blas32General) {
+// Activations64 is a map containing the inplace_activation functions
+var Activations64 = map[string]func(z blas64.General){
+	"identity": func(z blas64.General) {},
+	"logistic": func(z blas64.General) {
 		for row, zpos := 0, 0; row < z.Rows; row, zpos = row+1, zpos+z.Stride {
 			for col := 0; col < z.Cols; col++ {
-				z.Data[zpos+col] = 1 / (1 + M32.Exp(-z.Data[zpos+col]))
+				z.Data[zpos+col] = 1 / (1 + nn.M64.Exp(-z.Data[zpos+col]))
 			}
 		}
 	},
-	"tanh": func(z blas32General) {
+	"tanh": func(z blas64.General) {
 		for row, zpos := 0, 0; row < z.Rows; row, zpos = row+1, zpos+z.Stride {
 			for col := 0; col < z.Cols; col++ {
-				z.Data[zpos+col] = M32.Tanh(-z.Data[zpos+col])
+				z.Data[zpos+col] = nn.M64.Tanh(-z.Data[zpos+col])
 			}
 		}
 	},
-	"relu": func(z blas32General) {
+	"relu": func(z blas64.General) {
 		for row, zpos := 0, 0; row < z.Rows; row, zpos = row+1, zpos+z.Stride {
 			for col := 0; col < z.Cols; col++ {
 				if z.Data[zpos+col] < 0 {
@@ -101,12 +100,12 @@ var Activations32 = map[string]func(z blas32General){
 			}
 		}
 	},
-	"softmax": func(z blas32General) {
+	"softmax": func(z blas64.General) {
 		for row, zpos := 0, 0; row < z.Rows; row, zpos = row+1, zpos+z.Stride {
-			sum := float32(0)
+			sum := float64(0)
 			for col := 0; col < z.Cols; col++ {
 
-				z.Data[zpos+col] = M32.Exp(z.Data[zpos+col])
+				z.Data[zpos+col] = nn.M64.Exp(z.Data[zpos+col])
 				sum += z.Data[zpos+col]
 			}
 			for col := 0; col < z.Cols; col++ {
@@ -116,11 +115,11 @@ var Activations32 = map[string]func(z blas32General){
 	},
 }
 
-// Derivatives32 is a map of functions which multiply deltas with derivative of activation function
-var Derivatives32 = map[string]func(Z, deltas blas32General){
-	"identity": func(Z, deltas blas32General) {
+// Derivatives64 is a map of functions which multiply deltas with derivative of activation function
+var Derivatives64 = map[string]func(Z, deltas blas64.General){
+	"identity": func(Z, deltas blas64.General) {
 	},
-	"logistic": func(Z, deltas blas32General) {
+	"logistic": func(Z, deltas blas64.General) {
 		for row, zpos, dpos := 0, 0, 0; row < Z.Rows; row, zpos, dpos = row+1, zpos+Z.Stride, dpos+deltas.Stride {
 			for col := 0; col < Z.Cols; col++ {
 				z := Z.Data[zpos+col]
@@ -128,7 +127,7 @@ var Derivatives32 = map[string]func(Z, deltas blas32General){
 			}
 		}
 	},
-	"tanh": func(Z, deltas blas32General) {
+	"tanh": func(Z, deltas blas64.General) {
 		for row, zpos, dpos := 0, 0, 0; row < Z.Rows; row, zpos, dpos = row+1, zpos+Z.Stride, dpos+deltas.Stride {
 			for col := 0; col < Z.Cols; col++ {
 				z := Z.Data[zpos+col]
@@ -136,7 +135,7 @@ var Derivatives32 = map[string]func(Z, deltas blas32General){
 			}
 		}
 	},
-	"relu": func(Z, deltas blas32General) {
+	"relu": func(Z, deltas blas64.General) {
 		for row, zpos, dpos := 0, 0, 0; row < Z.Rows; row, zpos, dpos = row+1, zpos+Z.Stride, dpos+deltas.Stride {
 			for col := 0; col < Z.Cols; col++ {
 				if Z.Data[zpos+col] == 0 {
@@ -147,21 +146,21 @@ var Derivatives32 = map[string]func(Z, deltas blas32General){
 	},
 }
 
-// LossFunctions32 is a map for loss functions
-var LossFunctions32 = map[string]func(y, h blas32General) float32{
-	"square_loss": func(y, h blas32General) float32 {
-		sum := float32(0)
+// LossFunctions64 is a map for loss functions
+var LossFunctions64 = map[string]func(y, h blas64.General) float64{
+	"square_loss": func(y, h blas64.General) float64 {
+		sum := float64(0)
 		for row, hpos, ypos := 0, 0, 0; row < y.Rows; row, hpos, ypos = row+1, hpos+h.Stride, ypos+y.Stride {
 			for col := 0; col < y.Cols; col++ {
 				e := h.Data[hpos+col] - y.Data[ypos+col]
 				sum += e * e
 			}
 		}
-		return sum / 2 / float32(h.Rows)
+		return sum / 2 / float64(h.Rows)
 	},
-	"log_loss": func(y, h blas32General) float32 {
-		sum := float32(0)
-		hmin, hmax := M32.Nextafter(0, 1), M32.Nextafter(1, 0)
+	"log_loss": func(y, h blas64.General) float64 {
+		sum := float64(0)
+		hmin, hmax := nn.M64.Nextafter(0, 1), nn.M64.Nextafter(1, 0)
 		for row, hpos, ypos := 0, 0, 0; row < y.Rows; row, hpos, ypos = row+1, hpos+h.Stride, ypos+y.Stride {
 			for col := 0; col < y.Cols; col++ {
 				hval := h.Data[hpos+col]
@@ -171,15 +170,15 @@ var LossFunctions32 = map[string]func(y, h blas32General) float32{
 					hval = hmax
 				}
 				if y.Data[ypos+col] != 0 {
-					sum += -y.Data[ypos+col] * M32.Log(hval)
+					sum += -y.Data[ypos+col] * nn.M64.Log(hval)
 				}
 			}
 		}
-		return sum / float32(h.Rows)
+		return sum / float64(h.Rows)
 	},
-	"binary_log_loss": func(y, h blas32General) float32 {
-		sum := float32(0)
-		hmin, hmax := M32.Nextafter(0, 1), M32.Nextafter(1, 0)
+	"binary_log_loss": func(y, h blas64.General) float64 {
+		sum := float64(0)
+		hmin, hmax := nn.M64.Nextafter(0, 1), nn.M64.Nextafter(1, 0)
 		for row, hpos, ypos := 0, 0, 0; row < y.Rows; row, hpos, ypos = row+1, hpos+h.Stride, ypos+y.Stride {
 			for col := 0; col < y.Cols; col++ {
 				hval := h.Data[hpos+col]
@@ -188,21 +187,21 @@ var LossFunctions32 = map[string]func(y, h blas32General) float32{
 				} else if hval > hmax {
 					hval = hmax
 				}
-				sum += -y.Data[ypos+col]*M32.Log(hval) - (1-y.Data[ypos+col])*M32.Log1p(-hval)
+				sum += -y.Data[ypos+col]*nn.M64.Log(hval) - (1-y.Data[ypos+col])*nn.M64.Log1p(-hval)
 			}
 		}
-		return sum / float32(h.Rows)
+		return sum / float64(h.Rows)
 	},
 }
 
-// Optimizer32 is an interface for stochastic optimizers
-type Optimizer32 interface {
-	iterationEnds(timeStep float32)
+// Optimizer64 is an interface for stochastic optimizers
+type Optimizer64 interface {
+	iterationEnds(timeStep float64)
 	triggerStopping(msg string, verbose bool) bool
-	updateParams(grads []float32)
+	updateParams(grads []float64)
 }
 
-func addIntercepts32(a blas32General, b []float32) {
+func addIntercepts64(a blas64.General, b []float64) {
 	for arow, apos := 0, 0; arow < a.Rows; arow, apos = arow+1, apos+a.Stride {
 		for c := 0; c < a.Cols; c++ {
 			a.Data[apos+c] += b[c]
@@ -210,7 +209,7 @@ func addIntercepts32(a blas32General, b []float32) {
 	}
 }
 
-func matRowMean32(a blas32General, b []float32) {
+func matRowMean64(a blas64.General, b []float64) {
 	for c := 0; c < a.Cols; c++ {
 		b[c] = 0
 	}
@@ -220,14 +219,13 @@ func matRowMean32(a blas32General, b []float32) {
 		}
 	}
 	for c := 0; c < a.Cols; c++ {
-		b[c] /= float32(a.Rows)
+		b[c] /= float64(a.Rows)
 	}
 }
 
-// NewBaseMultilayerPerceptron32 returns a BaseMultilayerPerceptron32 with defaults
-func NewBaseMultilayerPerceptron32() *BaseMultilayerPerceptron32 {
-	return &BaseMultilayerPerceptron32{
-
+// NewDeepInterestNetwork returns a DeepInterestNetwork with defaults
+func NewDeepInterestNetwork() *DeepInterestNetwork {
+	return &DeepInterestNetwork{
 		Activation:       "relu",
 		Solver:           "adam",
 		Alpha:            0.0001,
@@ -256,13 +254,13 @@ func NewBaseMultilayerPerceptron32() *BaseMultilayerPerceptron32 {
 
 // forwardPass Perform a forward pass on the network by computing the values
 // of the neurons in the hidden layers and the output layer.
-//        activations : []blas32General, length = nLayers - 1
-func (mlp *BaseMultilayerPerceptron32) forwardPass(activations []blas32General) {
-	hiddenActivation := Activations32[mlp.Activation]
+//        activations : []blas64.General, length = nLayers - 1
+func (mlp *DeepInterestNetwork) forwardPass(activations []blas64.General) {
+	hiddenActivation := Activations64[mlp.Activation]
 	var i int
 	for i = 0; i < mlp.NLayers-1; i++ {
-		gemm32(blas.NoTrans, blas.NoTrans, 1, activations[i], mlp.Coefs[i], 0, activations[i+1])
-		addIntercepts32(activations[i+1], mlp.Intercepts[i])
+		blas64.Gemm(blas.NoTrans, blas.NoTrans, 1, activations[i], mlp.Coefs[i], 0, activations[i+1])
+		addIntercepts64(activations[i+1], mlp.Intercepts[i])
 		// For the hidden layers
 		if (i + 1) != (mlp.NLayers - 1) {
 			hiddenActivation(activations[i+1])
@@ -270,20 +268,20 @@ func (mlp *BaseMultilayerPerceptron32) forwardPass(activations []blas32General) 
 	}
 	i = mlp.NLayers - 2
 	// # For the last layer
-	outputActivation := Activations32[mlp.OutActivation]
+	outputActivation := Activations64[mlp.OutActivation]
 	outputActivation(activations[i+1])
 }
 
 // batchNormalize computes norms of activations and divides activations
-func (mlp *BaseMultilayerPerceptron32) batchNormalize(activations []blas32General) {
+func (mlp *DeepInterestNetwork) batchNormalize(activations []blas64.General) {
 	for i := 0; i < mlp.NLayers-2; i++ {
 		activation := activations[i+1]
 		batchNorm := mlp.batchNorm[i]
 		for o := 0; o < activation.Cols; o++ {
-			M := float32(0)
+			M := float64(0)
 			// compute max for layer i, output o
 			for r, rpos := 0, 0; r < activation.Rows; r, rpos = r+1, rpos+activation.Stride {
-				a := M32.Abs(activation.Data[rpos+o])
+				a := nn.M64.Abs(activation.Data[rpos+o])
 				if M < a {
 					M = a
 				}
@@ -300,7 +298,7 @@ func (mlp *BaseMultilayerPerceptron32) batchNormalize(activations []blas32Genera
 }
 
 // batchNormalizeDeltas divides deltas by batchNorm
-func (mlp *BaseMultilayerPerceptron32) batchNormalizeDeltas(deltas blas32General, batchNorm []float32) {
+func (mlp *DeepInterestNetwork) batchNormalizeDeltas(deltas blas64.General, batchNorm []float64) {
 	for r, rpos := 0, 0; r < deltas.Rows; r, rpos = r+1, rpos+deltas.Stride {
 		for o := 0; o < deltas.Cols; o++ {
 			deltas.Data[rpos+o] /= batchNorm[o]
@@ -308,8 +306,8 @@ func (mlp *BaseMultilayerPerceptron32) batchNormalizeDeltas(deltas blas32General
 	}
 }
 
-func (mlp *BaseMultilayerPerceptron32) sumCoefSquares() float32 {
-	s := float32(0)
+func (mlp *DeepInterestNetwork) sumCoefSquares() float64 {
+	s := float64(0)
 	for _, c := range mlp.Coefs {
 		for _, co := range c.Data {
 			s += co * co
@@ -320,25 +318,24 @@ func (mlp *BaseMultilayerPerceptron32) sumCoefSquares() float32 {
 
 // computeLossGrad Compute the gradient of loss with respect to coefs and intercept for specified layer.
 // This function does backpropagation for the specified one layer.
-func (mlp *BaseMultilayerPerceptron32) computeLossGrad(layer, NSamples int, activations []blas32General, deltas []blas32General, coefGrads []blas32General, interceptGrads [][]float32) {
+func (mlp *DeepInterestNetwork) computeLossGrad(layer, NSamples int, activations []blas64.General, deltas []blas64.General, coefGrads []blas64.General, interceptGrads [][]float64) {
 	// coefGrads[layer] = safeSparseDot(activations[layer].T, deltas[layer])
 	// coefGrads[layer] += (self.alpha * self.coefs_[layer])
 	// coefGrads[layer] /= nSamples
-	gemm32(blas.Trans, blas.NoTrans, 1/float32(NSamples), activations[layer], deltas[layer], 0, coefGrads[layer])
-	axpy32(len(coefGrads[layer].Data), mlp.Alpha/float32(NSamples), mlp.Coefs[layer].Data, coefGrads[layer].Data)
+	blas64.Gemm(blas.Trans, blas.NoTrans, 1/float64(NSamples), activations[layer], deltas[layer], 0, coefGrads[layer])
+	nn.Axpy64(len(coefGrads[layer].Data), mlp.Alpha/float64(NSamples), mlp.Coefs[layer].Data, coefGrads[layer].Data)
 	// interceptGrads[layer] = np.mean(deltas[layer], 0)
-	matRowMean32(deltas[layer], interceptGrads[layer])
+	matRowMean64(deltas[layer], interceptGrads[layer])
 }
 
 // backprop Compute the MLP loss function and its corresponding derivatives with respect to each parameter: weights and bias vectors.
-// X : blas32General shape (nSamples, nFeatures)
-// Y : blas32General shape (nSamples, nOutputs)
-// activations : []blas32General, length=NLayers-1
-// deltas : []blas32General, length=NLayers-1
-// coefGrads : []blas32General, length=NLayers-1
-// interceptGrads : [][]float32, length=NLayers-1
-
-func (mlp *BaseMultilayerPerceptron32) backprop(X, y blas32General, activations, deltas, coefGrads []blas32General, interceptGrads [][]float32) float32 {
+// X : blas64.General shape (nSamples, nFeatures)
+// Y : blas64.General shape (nSamples, nOutputs)
+// activations : []blas64.General, length=NLayers-1
+// deltas : []blas64.General, length=NLayers-1
+// coefGrads : []blas64.General, length=NLayers-1
+// interceptGrads : [][]float64, length=NLayers-1
+func (mlp *DeepInterestNetwork) backprop(X, y blas64.General, activations, deltas, coefGrads []blas64.General, interceptGrads [][]float64) float64 {
 	nSamples := X.Rows
 	if mlp.WeightDecay > 0 {
 		for iw := range mlp.packedParameters {
@@ -357,9 +354,9 @@ func (mlp *BaseMultilayerPerceptron32) backprop(X, y blas32General, activations,
 		lossFuncName = "binary_log_loss"
 	}
 	// y may have less rows than activations il last batch
-	loss := LossFunctions32[lossFuncName](y, activations[len(activations)-1])
+	loss := LossFunctions64[lossFuncName](y, activations[len(activations)-1])
 	// # Add L2 regularization term to loss
-	loss += (0.5 * mlp.Alpha) * mlp.sumCoefSquares() / float32(nSamples)
+	loss += (0.5 * mlp.Alpha) * mlp.sumCoefSquares() / float64(nSamples)
 
 	//# Backward propagate
 	last := mlp.NLayers - 2
@@ -388,9 +385,9 @@ func (mlp *BaseMultilayerPerceptron32) backprop(X, y blas32General, activations,
 	//# Iterate over the hidden layers
 	for i := mlp.NLayers - 2; i >= 1; i-- {
 		//deltas[i - 1] = safeSparseDot(deltas[i], self.coefs_[i].T)
-		gemm32(blas.NoTrans, blas.Trans, 1, deltas[i], mlp.Coefs[i], 0, deltas[i-1])
+		blas64.Gemm(blas.NoTrans, blas.Trans, 1, deltas[i], mlp.Coefs[i], 0, deltas[i-1])
 
-		inplaceDerivative := Derivatives32[mlp.Activation]
+		inplaceDerivative := Derivatives64[mlp.Activation]
 		// inplaceDerivative multiplies deltas[i-1] by activation derivative
 		inplaceDerivative(activations[i], deltas[i-1])
 		if mlp.BatchNormalize {
@@ -406,7 +403,7 @@ func (mlp *BaseMultilayerPerceptron32) backprop(X, y blas32General, activations,
 	return loss
 }
 
-func (mlp *BaseMultilayerPerceptron32) initialize(yCols int, layerUnits []int, isClassifier, isMultiClass bool) {
+func (mlp *DeepInterestNetwork) initialize(yCols int, layerUnits []int, isClassifier, isMultiClass bool) {
 	// # set all attributes, allocate weights etc for first call
 	// # Initialize parameters
 	mlp.NIter = 0
@@ -430,59 +427,59 @@ func (mlp *BaseMultilayerPerceptron32) initialize(yCols int, layerUnits []int, i
 		mlp.LossFuncName = "binary_log_loss"
 	}
 	//# Initialize coefficient and intercept layers
-	mlp.Coefs = make([]blas32General, mlp.NLayers-1)
-	mlp.Intercepts = make([][]float32, mlp.NLayers-1)
+	mlp.Coefs = make([]blas64.General, mlp.NLayers-1)
+	mlp.Intercepts = make([][]float64, mlp.NLayers-1)
 	off := 0
 	for i := 0; i < mlp.NLayers-1; i++ {
 		off += (1 + layerUnits[i]) * layerUnits[i+1]
 	}
-	mem := make([]float32, off)
+	mem := make([]float64, off)
 	mlp.packedParameters = mem[0:off]
 	if mlp.BatchNormalize {
 		// allocate batchNorm for non-terminal layers
-		mlp.batchNorm = make([][]float32, mlp.NLayers-2)
+		mlp.batchNorm = make([][]float64, mlp.NLayers-2)
 	}
 
 	off = 0
 	if mlp.RandomState == (base.RandomState)(nil) {
 		mlp.RandomState = base.NewLockedSource(uint64(time.Now().UnixNano()))
 	}
-	type Float32er interface {
-		Float32() float32
+	type Float64er interface {
+		Float64() float64
 	}
-	var rndFloat32 func() float32
-	if float32er, ok := mlp.RandomState.(Float32er); ok {
-		rndFloat32 = float32er.Float32
+	var rndFloat64 func() float64
+	if float64er, ok := mlp.RandomState.(Float64er); ok {
+		rndFloat64 = float64er.Float64
 	} else {
-		rndFloat32 = rand.New(mlp.RandomState).Float32
+		rndFloat64 = rand.New(mlp.RandomState).Float64
 	}
 	for i := 0; i < mlp.NLayers-1; i++ {
 		prevOff := off
 		mlp.Intercepts[i] = mem[off : off+layerUnits[i+1]]
 		off += layerUnits[i+1]
-		mlp.Coefs[i] = blas32General{Rows: layerUnits[i], Cols: layerUnits[i+1], Stride: layerUnits[i+1], Data: mem[off : off+layerUnits[i]*layerUnits[i+1]]}
+		mlp.Coefs[i] = blas64.General{Rows: layerUnits[i], Cols: layerUnits[i+1], Stride: layerUnits[i+1], Data: mem[off : off+layerUnits[i]*layerUnits[i+1]]}
 		off += layerUnits[i] * layerUnits[i+1]
 		// # Use the initialization method recommended by
 		// # Glorot et al.
-		factor := float32(6.)
+		factor := float64(6.)
 		fanIn, fanOut := layerUnits[i], layerUnits[i+1]
 		if strings.EqualFold(mlp.Activation, "logistic") {
 			factor = 2.
 		}
 
-		initBound := M32.Sqrt(factor / float32(fanIn+fanOut))
+		initBound := nn.M64.Sqrt(factor / float64(fanIn+fanOut))
 		for pos := prevOff; pos < off; pos++ {
-			mem[pos] = rndFloat32() * initBound
+			mem[pos] = rndFloat64() * initBound
 		}
 		if mlp.BatchNormalize && i < mlp.NLayers-2 {
-			mlp.batchNorm[i] = make([]float32, layerUnits[i+1])
+			mlp.batchNorm[i] = make([]float64, layerUnits[i+1])
 		}
 	}
 
-	mlp.BestLoss = M32.Inf(1)
+	mlp.BestLoss = nn.M64.Inf(1)
 }
 
-func (mlp *BaseMultilayerPerceptron32) fit(X, y blas32General, incremental bool) {
+func (mlp *DeepInterestNetwork) fit(X, y blas64.General, incremental bool) {
 	// # Validate input parameters.
 	mlp.validateHyperparameters()
 	for _, s := range mlp.HiddenLayerSizes {
@@ -512,10 +509,11 @@ func (mlp *BaseMultilayerPerceptron32) fit(X, y blas32General, incremental bool)
 		mlp.initialize(y.Cols, layerUnits, isClassifier, isMulticlass)
 	}
 
-	//    # lbfgs does not support mini-batches
-	if strings.EqualFold(mlp.Solver, "lbfgs") {
-		mlp.BatchSize = nSamples
-	} else if mlp.BatchSize <= 0 {
+	////    # lbfgs does not support mini-batches
+	//if strings.EqualFold(mlp.Solver, "lbfgs") {
+	//	mlp.BatchSize = nSamples
+	//} else
+	if mlp.BatchSize <= 0 {
 		mlp.BatchSize = nSamples
 		if mlp.BatchSize > 200 {
 			mlp.BatchSize = 200
@@ -527,92 +525,92 @@ func (mlp *BaseMultilayerPerceptron32) fit(X, y blas32General, incremental bool)
 		}
 	}
 	// # Initialize lists
-	activations := make([]blas32.General, 1, len(layerUnits))
+	activations := make([]blas64.General, 1, len(layerUnits))
 	activations[0] = X
-	deltas := make([]blas32.General, 0, len(layerUnits)-1)
+	deltas := make([]blas64.General, 0, len(layerUnits)-1)
 	// compute size of activations and deltas
 	off := 0
 	for _, nFanOut := range layerUnits[1:] {
 		size := mlp.BatchSize * nFanOut
 		off += size + size
 	}
-	mem := make([]float32, off)
+	mem := make([]float64, off)
 	off = 0
 	for _, nFanOut := range layerUnits[1:] {
 		size := mlp.BatchSize * nFanOut
-		activations = append(activations, blas32General{Rows: mlp.BatchSize, Cols: nFanOut, Stride: nFanOut, Data: mem[off : off+size]})
+		activations = append(activations, blas64.General{Rows: mlp.BatchSize, Cols: nFanOut, Stride: nFanOut, Data: mem[off : off+size]})
 		off += size
-		deltas = append(deltas, blas32General{Rows: mlp.BatchSize, Cols: nFanOut, Stride: nFanOut, Data: mem[off : off+size]})
+		deltas = append(deltas, blas64.General{Rows: mlp.BatchSize, Cols: nFanOut, Stride: nFanOut, Data: mem[off : off+size]})
 		off += size
 	}
 
 	off = len(mlp.packedParameters)
-	packedGrads := make([]float32, off)
-	CoefsGrads := make([]blas32General, mlp.NLayers-1)
-	InterceptsGrads := make([][]float32, mlp.NLayers-1)
+	packedGrads := make([]float64, off)
+	CoefsGrads := make([]blas64.General, mlp.NLayers-1)
+	InterceptsGrads := make([][]float64, mlp.NLayers-1)
 	off = 0
 	for i := 0; i < mlp.NLayers-1; i++ {
 		InterceptsGrads[i] = packedGrads[off : off+layerUnits[i+1]]
 		off += layerUnits[i+1]
-		CoefsGrads[i] = blas32General{Rows: layerUnits[i], Cols: layerUnits[i+1], Stride: layerUnits[i+1], Data: packedGrads[off : off+layerUnits[i]*layerUnits[i+1]]}
+		CoefsGrads[i] = blas64.General{Rows: layerUnits[i], Cols: layerUnits[i+1], Stride: layerUnits[i+1], Data: packedGrads[off : off+layerUnits[i]*layerUnits[i+1]]}
 		off += layerUnits[i] * layerUnits[i+1]
 	}
 
-	if strings.EqualFold(mlp.Solver, "lbfgs") {
-		// # Run the LBFGS solver
-		mlp.fitLbfgs(X, y, activations, deltas, CoefsGrads,
-			InterceptsGrads, packedGrads, layerUnits)
-	} else {
-		// # Run the Stochastic optimization solver
-		mlp.fitStochastic(X, y, activations, deltas, CoefsGrads,
-			InterceptsGrads, packedGrads, layerUnits, incremental)
-	}
+	//if strings.EqualFold(mlp.Solver, "lbfgs") {
+	//	// # Run the LBFGS solver
+	//	mlp.fitLbfgs(X, y, activations, deltas, CoefsGrads,
+	//		InterceptsGrads, packedGrads, layerUnits)
+	//} else {
+	// # Run the Stochastic optimization solver
+	mlp.fitStochastic(X, y, activations, deltas, CoefsGrads,
+		InterceptsGrads, packedGrads, layerUnits, incremental)
+	//}
 	mlp.packedGrads = packedGrads
 }
 
 // IsClassifier return true if LossFuncName is not square_loss
-func (mlp *BaseMultilayerPerceptron32) IsClassifier() bool {
+func (mlp *DeepInterestNetwork) IsClassifier() bool {
 	return mlp.LossFuncName != "square_loss"
 }
 
 // Fit compute Coefs and Intercepts
-func (mlp *BaseMultilayerPerceptron32) Fit(X, Y Matrix) {
-	var xb, yb blas32.General
-	if xg, ok := X.(RawMatrixer32); ok && !mlp.Shuffle {
-		if yg, ok := Y.(RawMatrixer32); ok {
+func (mlp *DeepInterestNetwork) Fit(X, Y nn.Matrix) {
+	var xb, yb blas64.General
+	if xg, ok := X.(nn.RawMatrixer64); ok && !mlp.Shuffle {
+		if yg, ok := Y.(nn.RawMatrixer64); ok {
 			xb, yb = xg.RawMatrix(), yg.RawMatrix()
 		}
 	} else {
-		var tmp General32
-		tmp = General32(xb)
+		var tmp nn.General64
+		tmp = nn.General64(xb)
 		tmp.Copy(X)
 		xb = tmp.RawMatrix()
-		tmp = General32(yb)
+		tmp = nn.General64(yb)
 		tmp.Copy(Y)
 		yb = tmp.RawMatrix()
 	}
-	if mlp.IsClassifier() && !isBinarized32(yb) {
-		mlp.lb = NewLabelBinarizer32(0, 1)
-		xbin, ybin := mlp.lb.FitTransform(General32(xb), General32(yb))
-		xb, yb = blas32.General(xbin), blas32.General(ybin)
+	if mlp.IsClassifier() && !isBinarized64(yb) {
+		mlp.lb = NewLabelBinarizer64(0, 1)
+		xbin, ybin := mlp.lb.FitTransform(nn.General64(xb), nn.General64(yb))
+		xb, yb = blas64.General(xbin), blas64.General(ybin)
 	}
 	mlp.fit(xb, yb, false)
 }
 
 // GetNOutputs returns output columns number for Y to pass to predict
-func (mlp *BaseMultilayerPerceptron32) GetNOutputs() int {
+func (mlp *DeepInterestNetwork) GetNOutputs() int {
 	if mlp.lb != nil {
 		return len(mlp.lb.Classes)
 	}
 	return mlp.NOutputs
 }
 
-// Predict do forward pass and fills Y (Y must be Mutable)
-func (mlp *BaseMultilayerPerceptron32) Predict(X mat.Matrix, Y Mutable) {
-	var xb, yb General32
-	if xg, ok := X.(RawMatrixer32); ok {
-		if yg, ok := Y.(RawMatrixer32); ok {
-			xb, yb = General32(xg.RawMatrix()), General32(yg.RawMatrix())
+// Predict do forward pass and fills Y (Y must be nn.Mutable)
+func (mlp *DeepInterestNetwork) Predict(X mat.Matrix, Y nn.Mutable) {
+	var xb, yb nn.General64
+	if xg, ok := X.(nn.RawMatrixer64); ok {
+		if yg, ok := Y.(nn.RawMatrixer64); ok {
+			xb, yb = nn.General64(xg.RawMatrix()), nn.General64(yg.RawMatrix())
 		}
 	} else {
 		xb.Copy(X)
@@ -620,10 +618,10 @@ func (mlp *BaseMultilayerPerceptron32) Predict(X mat.Matrix, Y Mutable) {
 	}
 	mlp.predict(xb.RawMatrix(), yb.RawMatrix())
 
-	FromDense32(Y, yb)
+	FromDense64(Y, yb)
 }
 
-func (mlp *BaseMultilayerPerceptron32) validateHyperparameters() {
+func (mlp *DeepInterestNetwork) validateHyperparameters() {
 	if mlp.MaxIter <= 0 {
 		log.Panicf("maxIter must be > 0, got %d.", mlp.MaxIter)
 	}
@@ -654,11 +652,11 @@ func (mlp *BaseMultilayerPerceptron32) validateHyperparameters() {
 	//# raise ValueError if not registered
 
 	supportedActivations := []string{}
-	for k := range Activations32 {
+	for k := range Activations64 {
 		supportedActivations = append(supportedActivations, k)
 	}
 
-	if _, ok := Activations32[mlp.Activation]; !ok {
+	if _, ok := Activations64[mlp.Activation]; !ok {
 		log.Panicf("The activation \"%s\" is not supported. Supported activations are %s.", mlp.Activation, supportedActivations)
 	}
 	switch mlp.LearningRate {
@@ -673,67 +671,68 @@ func (mlp *BaseMultilayerPerceptron32) validateHyperparameters() {
 	}
 }
 
-func (mlp *BaseMultilayerPerceptron32) fitLbfgs(X, y blas32General, activations, deltas, coefGrads []blas32General,
-	interceptGrads [][]float32, packedGrads []float32, layerUnits []int) {
-	method := &optimize.LBFGS{}
-	settings := &optimize.Settings{
-		FuncEvaluations: mlp.MaxIter,
-		Converger: &optimize.FunctionConverge{
-			Relative:   float64(mlp.Tol),
-			Iterations: mlp.NIterNoChange,
-		},
-		Concurrent: runtime.GOMAXPROCS(0),
-	}
+//
+//func (mlp *DeepInterestNetwork) fitLbfgs(X, y blas64.General, activations, deltas, coefGrads []blas64.General,
+//	interceptGrads [][]float64, packedGrads []float64, layerUnits []int) {
+//	method := &optimize.LBFGS{}
+//	settings := &optimize.Settings{
+//		FuncEvaluations: mlp.MaxIter,
+//		Converger: &optimize.FunctionConverge{
+//			Relative:   float64(mlp.Tol),
+//			Iterations: mlp.NIterNoChange,
+//		},
+//		Concurrent: runtime.GOMAXPROCS(0),
+//	}
+//
+//	var mu sync.Mutex // sync access to mlp.Loss on LossCurve
+//	problem := optimize.Problem{
+//		Func: func(w []float64) float64 {
+//			for i := range w {
+//				mlp.packedParameters[i] = float64(w[i])
+//			}
+//			loss := float64(mlp.backprop(X, y, activations, deltas, coefGrads, interceptGrads))
+//			mu.Lock()
+//			mlp.Loss = float64(loss)
+//			mlp.LossCurve = append(mlp.LossCurve, mlp.Loss)
+//			if mlp.BestLoss > mlp.Loss {
+//				mlp.BestLoss = mlp.Loss
+//			}
+//			mu.Unlock()
+//			return loss
+//		},
+//		Grad: func(g, w []float64) {
+//			// Grad is called just after Func with same w
+//			if g == nil { // g is nil at first call
+//				g = make([]float64, len(w))
+//			}
+//			for i := range w {
+//				g[i] = float64(packedGrads[i])
+//			}
+//		},
+//	}
+//	w := make([]float64, len(mlp.packedParameters))
+//	for i := range w {
+//		w[i] = float64(mlp.packedParameters[i])
+//	}
+//	if mlp.beforeMinimize != nil {
+//		mlp.beforeMinimize(problem, w)
+//	}
+//	res, err := optimize.Minimize(problem, w, settings, method)
+//	if err != nil {
+//		log.Panic(err)
+//	}
+//	if res.Status != optimize.GradientThreshold && res.Status != optimize.FunctionConvergence {
+//		log.Printf("lbfgs optimizer: Maximum iterations (%d) reached and the optimization hasn't converged yet.\n", mlp.MaxIter)
+//	}
+//}
 
-	var mu sync.Mutex // sync access to mlp.Loss on LossCurve
-	problem := optimize.Problem{
-		Func: func(w []float64) float64 {
-			for i := range w {
-				mlp.packedParameters[i] = float32(w[i])
-			}
-			loss := float64(mlp.backprop(X, y, activations, deltas, coefGrads, interceptGrads))
-			mu.Lock()
-			mlp.Loss = float32(loss)
-			mlp.LossCurve = append(mlp.LossCurve, mlp.Loss)
-			if mlp.BestLoss > mlp.Loss {
-				mlp.BestLoss = mlp.Loss
-			}
-			mu.Unlock()
-			return loss
-		},
-		Grad: func(g, w []float64) {
-			// Grad is called just after Func with same w
-			if g == nil { // g is nil at first call
-				g = make([]float64, len(w))
-			}
-			for i := range w {
-				g[i] = float64(packedGrads[i])
-			}
-		},
-	}
-	w := make([]float64, len(mlp.packedParameters))
-	for i := range w {
-		w[i] = float64(mlp.packedParameters[i])
-	}
-	if mlp.beforeMinimize != nil {
-		mlp.beforeMinimize(problem, w)
-	}
-	res, err := optimize.Minimize(problem, w, settings, method)
-	if err != nil {
-		log.Panic(err)
-	}
-	if res.Status != optimize.GradientThreshold && res.Status != optimize.FunctionConvergence {
-		log.Printf("lbfgs optimizer: Maximum iterations (%d) reached and the optimization hasn't converged yet.\n", mlp.MaxIter)
-	}
-}
-
-func (mlp *BaseMultilayerPerceptron32) fitStochastic(X, y blas32General, activations, deltas, coefGrads []blas32General,
-	interceptGrads [][]float32, packedGrads []float32, layerUnits []int, incremental bool) {
-	if !incremental || mlp.optimizer == Optimizer32(nil) {
+func (mlp *DeepInterestNetwork) fitStochastic(X, y blas64.General, activations, deltas, coefGrads []blas64.General,
+	interceptGrads [][]float64, packedGrads []float64, layerUnits []int, incremental bool) {
+	if !incremental || mlp.optimizer == Optimizer64(nil) {
 		params := mlp.packedParameters
 		switch mlp.Solver {
 		case "sgd":
-			mlp.optimizer = &SGDOptimizer32{
+			mlp.optimizer = &SGDOptimizer64{
 				Params:           params,
 				LearningRateInit: mlp.LearningRateInit,
 				LearningRate:     mlp.LearningRateInit,
@@ -742,26 +741,27 @@ func (mlp *BaseMultilayerPerceptron32) fitStochastic(X, y blas32General, activat
 				Momentum:         mlp.Momentum,
 				Nesterov:         mlp.NesterovsMomentum}
 		case "adam":
-			mlp.optimizer = &AdamOptimizer32{
+			mlp.optimizer = &AdamOptimizer64{
 				Params:           params,
 				LearningRateInit: mlp.LearningRateInit,
 				LearningRate:     mlp.LearningRateInit,
+				LRSchedule:       mlp.LearningRate,
 				Beta1:            mlp.Beta1, Beta2: mlp.Beta2, Epsilon: mlp.Epsilon,
 			}
 		}
 	}
 	// # earlyStopping in partialFit doesn"t make sense
 	earlyStopping := mlp.EarlyStopping && !incremental
-	var XVal, yVal blas32General
+	var XVal, yVal blas64.General
 	nSamples := X.Rows
 	testSize := 0
 	if earlyStopping {
-		testSize = int(M32.Ceil(mlp.ValidationFraction * float32(nSamples)))
-		XVal = blas32General(General32(X).RowSlice(nSamples-testSize, nSamples))
-		yVal = blas32General(General32(y).RowSlice(nSamples-testSize, nSamples))
-		mlp.bestParameters = make([]float32, len(mlp.packedParameters))
+		testSize = int(nn.M64.Ceil(mlp.ValidationFraction * float64(nSamples)))
+		XVal = blas64.General(nn.General64(X).RowSlice(nSamples-testSize, nSamples))
+		yVal = blas64.General(nn.General64(y).RowSlice(nSamples-testSize, nSamples))
+		mlp.bestParameters = make([]float64, len(mlp.packedParameters))
 		// if isClassifier(self):
-		// 	yVal = self.LabelBinarizer32.inverseTransform(yVal)
+		// 	yVal = self.LabelBinarizer64.inverseTransform(yVal)
 	}
 	batchSize := mlp.BatchSize
 	idx := make([]int, nSamples)
@@ -785,43 +785,43 @@ func (mlp *BaseMultilayerPerceptron32) fitStochastic(X, y blas32General, activat
 		}
 		for it := 0; it < mlp.MaxIter; it++ {
 			if mlp.Shuffle {
-				rndShuffle(nSamples, IndexedXY{Idx: sort.IntSlice(idx), X: general32FastSwap(X), Y: general32FastSwap(y)}.Swap)
+				rndShuffle(nSamples, nn.IndexedXY{Idx: sort.IntSlice(idx), X: nn.General64FastSwap(X), Y: nn.General64FastSwap(y)}.Swap)
 			}
-			accumulatedLoss := float32(0.0)
+			accumulatedLoss := float64(0.0)
 			for batch := [2]int{0, batchSize}; batch[0] < nSamples-testSize; batch = [2]int{batch[1], batch[1] + batchSize} {
 				if batch[1] > nSamples-testSize {
 					batch[1] = nSamples - testSize
 				}
 				// activations[0] = X[batchSlice]
-				Xbatch := blas32General(General32(X).RowSlice(batch[0], batch[1]))
-				Ybatch := blas32General(General32(y).RowSlice(batch[0], batch[1]))
+				Xbatch := blas64.General(nn.General64(X).RowSlice(batch[0], batch[1]))
+				Ybatch := blas64.General(nn.General64(y).RowSlice(batch[0], batch[1]))
 
 				activations[0] = Xbatch
 				for _, a := range activations {
 					a.Rows = Xbatch.Rows
 				}
 
-				//X, y blas32General, activations, deltas, coefGrads []blas32General, interceptGrads
+				//X, y blas64.General, activations, deltas, coefGrads []blas64.General, interceptGrads
 				batchLoss := mlp.backprop(Xbatch, Ybatch, activations, deltas, coefGrads, interceptGrads)
-				accumulatedLoss += batchLoss * float32(batch[1]-batch[0])
+				accumulatedLoss += batchLoss * float64(batch[1]-batch[0])
 
 				//# update weights
 				mlp.optimizer.updateParams(packedGrads)
 			}
 			mlp.NIter++
-			mlp.Loss = accumulatedLoss / float32(nSamples)
+			mlp.Loss = accumulatedLoss / float64(nSamples)
 
 			mlp.t += nSamples
 			mlp.LossCurve = append(mlp.LossCurve, mlp.Loss)
 			if mlp.Verbose {
-				fmt.Printf("Iteration %d, loss = %.8f\n", mlp.NIter, mlp.Loss)
+				fmt.Printf("Iteration %d, NoImprove %d, loss = %.8f\n", mlp.NIter, mlp.NoImprovementCount, mlp.Loss)
 			}
 			// # update noImprovementCount based on training loss or
 			// # validation score according to earlyStopping
 			mlp.updateNoImprovementCount(earlyStopping, XVal, yVal)
 
 			// # for learning rate that needs to be updated at iteration end
-			mlp.optimizer.iterationEnds(float32(mlp.t))
+			mlp.optimizer.iterationEnds(float64(mlp.t))
 
 			if mlp.NoImprovementCount > mlp.NIterNoChange {
 				// # not better than last `nIterNoChange` iterations by tol
@@ -852,11 +852,11 @@ func (mlp *BaseMultilayerPerceptron32) fitStochastic(X, y blas32General, activat
 		copy(mlp.packedParameters, mlp.bestParameters)
 	}
 	if mlp.Shuffle {
-		sort.Sort(IndexedXY{Idx: sort.IntSlice(idx), X: general32FastSwap(X), Y: general32FastSwap(y)})
+		sort.Sort(nn.IndexedXY{Idx: sort.IntSlice(idx), X: nn.General64FastSwap(X), Y: nn.General64FastSwap(y)})
 	}
 }
 
-func (mlp *BaseMultilayerPerceptron32) updateNoImprovementCount(earlyStopping bool, XVal, yVal blas32General) {
+func (mlp *DeepInterestNetwork) updateNoImprovementCount(earlyStopping bool, XVal, yVal blas64.General) {
 
 	if earlyStopping {
 		//# compute validation score, use that for stopping
@@ -894,19 +894,19 @@ func (mlp *BaseMultilayerPerceptron32) updateNoImprovementCount(earlyStopping bo
 	}
 }
 
-func (mlp *BaseMultilayerPerceptron32) predictProbas(X, Y blas32General) {
+func (mlp *DeepInterestNetwork) predictProbas(X, Y blas64.General) {
 	_, nFeatures := X.Rows, X.Cols
 
 	layerUnits := append([]int{nFeatures}, mlp.HiddenLayerSizes...)
 	layerUnits = append(layerUnits, mlp.NOutputs)
 	// # Initialize layers
-	activations := []blas32General{X}
+	activations := []blas64.General{X}
 	for i, nFanOut := range layerUnits[1:] {
-		var activation blas32General
+		var activation blas64.General
 		if i == len(layerUnits)-2 {
 			activation = Y
 		} else {
-			activation = blas32General{Rows: X.Rows, Cols: nFanOut, Stride: nFanOut, Data: make([]float32, X.Rows*nFanOut)}
+			activation = blas64.General{Rows: X.Rows, Cols: nFanOut, Stride: nFanOut, Data: make([]float64, X.Rows*nFanOut)}
 		}
 		activations = append(activations, activation)
 	}
@@ -914,36 +914,34 @@ func (mlp *BaseMultilayerPerceptron32) predictProbas(X, Y blas32General) {
 	mlp.forwardPass(activations)
 }
 
-func (mlp *BaseMultilayerPerceptron32) predict(X, Y blas32General) {
-	var ybin General32
+func (mlp *DeepInterestNetwork) predict(X, Y blas64.General) {
+	var ybin nn.General64
 	if mlp.lb == nil {
-		ybin = General32(Y)
+		ybin = nn.General64(Y)
 	} else {
-		_, ybin = mlp.lb.Transform(General32(X), General32(Y))
+		_, ybin = mlp.lb.Transform(nn.General64(X), nn.General64(Y))
 	}
 	mlp.predictProbas(X, ybin.RawMatrix())
 	if mlp.lb != nil {
-		_, Yclasses := mlp.lb.InverseTransform(General32(X), ybin)
-		var tmp = General32(Y)
+		_, Yclasses := mlp.lb.InverseTransform(nn.General64(X), ybin)
+		var tmp = nn.General64(Y)
 		tmp.Copy(Yclasses)
 		Y = tmp.RawMatrix()
-	} else if mlp.IsClassifier() {
-		toLogits32(Y)
 	}
 }
 
-func (mlp *BaseMultilayerPerceptron32) score(X, Y blas32General) float32 {
-	H := blas32General{Rows: Y.Rows, Cols: Y.Cols, Stride: Y.Stride, Data: make([]float32, len(Y.Data))}
+func (mlp *DeepInterestNetwork) score(X, Y blas64.General) float64 {
+	H := blas64.General{Rows: Y.Rows, Cols: Y.Cols, Stride: Y.Stride, Data: make([]float64, len(Y.Data))}
 	mlp.predict(X, H)
 	if mlp.LossFuncName != "square_loss" {
 		// accuracy
-		return accuracyScore32(Y, H)
+		return AccuracyScore64(Y, H)
 	}
 	// R2Score
-	return r2Score32(Y, H)
+	return r2Score64(Y, H)
 }
 
-func (mlp *BaseMultilayerPerceptron32) validateInput(X, y blas32General, incremental bool) (Xout, youy blas32General) {
+func (mlp *DeepInterestNetwork) validateInput(X, y blas64.General, incremental bool) (Xout, youy blas64.General) {
 	/*
 	   X, y = check_X_y(X, y, accept_sparse=['csr', 'csc', 'coo'],
 	                     multi_output=True)
@@ -951,7 +949,7 @@ func (mlp *BaseMultilayerPerceptron32) validateInput(X, y blas32General, increme
 	        y = column_or_1d(y, warn=True)
 
 	    if not incremental:
-	        self._label_binarizer = LabelBinarizer32()
+	        self._label_binarizer = LabelBinarizer64()
 	        self._label_binarizer.fit(y)
 	        self.classes_ = self._label_binarizer.classes_
 	    elif self.warm_start:
@@ -974,37 +972,37 @@ func (mlp *BaseMultilayerPerceptron32) validateInput(X, y blas32General, increme
 	return X, y
 }
 
-// Score for BaseMultiLayerPerceptron32 is R2Score or Accuracy depending on LossFuncName
-func (mlp *BaseMultilayerPerceptron32) Score(Xmatrix, Ymatrix mat.Matrix) float64 {
-	X, Y := ToDense32(Xmatrix), ToDense32(Ymatrix)
+// Score for DeepInterestNetwork is R2Score or Accuracy depending on LossFuncName
+func (mlp *DeepInterestNetwork) Score(Xmatrix, Ymatrix mat.Matrix) float64 {
+	X, Y := ToDense64(Xmatrix), ToDense64(Ymatrix)
 	nSamples, nOutputs := X.RawMatrix().Rows, mlp.GetNOutputs()
-	Ypred := blas32.General{Rows: nSamples, Cols: nOutputs, Stride: nOutputs, Data: make([]float32, nSamples*nOutputs)}
-	mlp.Predict(X, General32(Ypred))
+	Ypred := blas64.General{Rows: nSamples, Cols: nOutputs, Stride: nOutputs, Data: make([]float64, nSamples*nOutputs)}
+	mlp.Predict(X, nn.General64(Ypred))
 	if mlp.LossFuncName == "square_loss" {
-		return float64(r2Score32(blas32.General(Y), Ypred))
+		return float64(r2Score64(blas64.General(Y), Ypred))
 	}
-	return float64(accuracyScore32(blas32.General(Y), Ypred))
+	return float64(AccuracyScore64(blas64.General(Y), Ypred))
 }
 
-// SGDOptimizer32 is the stochastic gradient descent optimizer
-type SGDOptimizer32 struct {
-	Params           []float32
-	LearningRateInit float32
-	LearningRate     float32
-	PowerT           float32
+// SGDOptimizer64 is the stochastic gradient descent optimizer
+type SGDOptimizer64 struct {
+	Params           []float64
+	LearningRateInit float64
+	LearningRate     float64
+	PowerT           float64
 	LRSchedule       string
-	Momentum         float32
+	Momentum         float64
 	Nesterov         bool
-	velocities       []float32
+	velocities       []float64
 }
 
-func (opt *SGDOptimizer32) iterationEnds(timeStep float32) {
+func (opt *SGDOptimizer64) iterationEnds(timeStep float64) {
 	if strings.EqualFold(opt.LRSchedule, "invscaling") {
-		opt.LearningRate = opt.LearningRateInit / M32.Pow(timeStep+1, opt.PowerT)
+		opt.LearningRate = opt.LearningRateInit / nn.M64.Pow(timeStep+1, opt.PowerT)
 	}
 
 }
-func (opt *SGDOptimizer32) triggerStopping(msg string, verbose bool) bool {
+func (opt *SGDOptimizer64) triggerStopping(msg string, verbose bool) bool {
 	if !strings.EqualFold(opt.LRSchedule, "adaptive") {
 		if verbose {
 			fmt.Println(msg + " Stopping.")
@@ -1017,15 +1015,15 @@ func (opt *SGDOptimizer32) triggerStopping(msg string, verbose bool) bool {
 		}
 		return true
 	}
-	opt.LearningRate /= 5.
+	opt.LearningRate *= .8
 	if verbose {
-		fmt.Println(msg+" Setting learning rate to %f", opt.LearningRate)
+		fmt.Printf("%s Setting learning rate to %f\n", msg, opt.LearningRate)
 	}
 	return false
 }
-func (opt *SGDOptimizer32) updateParams(grads []float32) {
+func (opt *SGDOptimizer64) updateParams(grads []float64) {
 	if opt.velocities == nil {
-		opt.velocities = make([]float32, len(grads))
+		opt.velocities = make([]float64, len(grads))
 	}
 	for i := range grads {
 		update := opt.Momentum*opt.velocities[i] - opt.LearningRate*grads[i]
@@ -1040,23 +1038,44 @@ func (opt *SGDOptimizer32) updateParams(grads []float32) {
 
 }
 
-// AdamOptimizer32 is the stochastic adam optimizer
-type AdamOptimizer32 struct {
-	Params                []float32
-	LearningRateInit      float32
-	LearningRate          float32
-	Beta1, Beta2, Epsilon float32
-	t                     float32
-	ms, vs                []float32
-	beta1t, beta2t        float32
+// AdamOptimizer64 is the stochastic adam optimizer
+type AdamOptimizer64 struct {
+	Params                []float64
+	LearningRateInit      float64
+	LearningRate          float64
+	LRSchedule            string
+	Beta1, Beta2, Epsilon float64
+	t                     float64
+	ms, vs                []float64
+	beta1t, beta2t        float64
 }
 
-func (opt *AdamOptimizer32) iterationEnds(timeStep float32)                {}
-func (opt *AdamOptimizer32) triggerStopping(msg string, verbose bool) bool { return true }
-func (opt *AdamOptimizer32) updateParams(grads []float32) {
+func (opt *AdamOptimizer64) iterationEnds(timeStep float64) {}
+func (opt *AdamOptimizer64) triggerStopping(msg string, verbose bool) bool {
+	if !strings.EqualFold(opt.LRSchedule, "adaptive") {
+		if verbose {
+			fmt.Println(msg + " Stopping.")
+		}
+		return true
+	}
+	if opt.LearningRate <= 1e-6 {
+		if verbose {
+			fmt.Println(msg + " Learning rate too small. Stopping.")
+		}
+		return true
+	}
+	opt.LearningRateInit *= .8
+	if verbose {
+		fmt.Printf("%s Setting base learning rate to %f\n", msg, opt.LearningRateInit)
+	}
+	return false
+
+}
+
+func (opt *AdamOptimizer64) updateParams(grads []float64) {
 	if opt.t == 0 {
-		opt.ms = make([]float32, len(grads))
-		opt.vs = make([]float32, len(grads))
+		opt.ms = make([]float64, len(grads))
+		opt.vs = make([]float64, len(grads))
 		opt.beta1t, opt.beta2t = 1, 1
 	}
 	opt.t++
@@ -1065,13 +1084,13 @@ func (opt *AdamOptimizer32) updateParams(grads []float32) {
 		opt.vs[i] = opt.Beta2*opt.vs[i] + (1-opt.Beta2)*grad*grad
 		opt.beta1t *= opt.Beta1
 		opt.beta2t *= opt.Beta2
-		opt.LearningRate = opt.LearningRateInit * M32.Sqrt(1-opt.beta2t) / (1. - opt.beta1t)
-		update := -opt.LearningRate * opt.ms[i] / (M32.Sqrt(opt.vs[i]) + opt.Epsilon)
+		opt.LearningRate = opt.LearningRateInit * nn.M64.Sqrt(1-opt.beta2t) / (1. - opt.beta1t)
+		update := -opt.LearningRate * opt.ms[i] / (nn.M64.Sqrt(opt.vs[i]) + opt.Epsilon)
 		opt.Params[i] += update
 	}
 }
 
-func toLogits32(ym blas32General) {
+func toLogits64(ym blas64.General) {
 	for i, ypos := 0, 0; i < ym.Rows; i, ypos = i+1, ypos+ym.Stride {
 		if ym.Cols == 1 {
 			v := ym.Data[ypos]
@@ -1082,9 +1101,9 @@ func toLogits32(ym blas32General) {
 			}
 			ym.Data[ypos] = v
 		} else {
-			M := MaxIdx32(ym.Data[ypos : ypos+ym.Cols])
+			M := nn.MaxIdx64(ym.Data[ypos : ypos+ym.Cols])
 			for c := 0; c < ym.Cols; c++ {
-				v := float32(0)
+				v := float64(0)
 				if c == M {
 					v = 1.
 				}
@@ -1094,16 +1113,16 @@ func toLogits32(ym blas32General) {
 	}
 }
 
-func r2Score32(yTrue, yPred blas32General) float32 {
-	var r2acc float32
+func r2Score64(yTrue, yPred blas64.General) float64 {
+	var r2acc float64
 	for c := 0; c < yTrue.Cols; c++ {
 		// yTrueAvg
-		var yTrueAvg, yNum, yDen float32
+		var yTrueAvg, yNum, yDen float64
 		for r, ypos := 0, 0; r < yTrue.Rows; r, ypos = r+1, ypos+yTrue.Stride {
 			yTrueAvg += yTrue.Data[ypos+c]
 
 		}
-		yTrueAvg /= float32(yTrue.Rows)
+		yTrueAvg /= float64(yTrue.Rows)
 		// yDen = YTrue-YTrueAvg
 
 		for r, ypos := 0, 0; r < yTrue.Rows; r, ypos = r+1, ypos+yTrue.Stride {
@@ -1118,11 +1137,11 @@ func r2Score32(yTrue, yPred blas32General) float32 {
 		r2 := 1 - yNum/yDen
 		r2acc += r2
 	}
-	return r2acc / float32(yTrue.Cols)
+	return r2acc / float64(yTrue.Cols)
 }
 
-func accuracyScore32(Y, H blas32General) float32 {
-	N := float32(0)
+func AccuracyScore64(Y, H blas64.General) float64 {
+	N := float64(0)
 	for i, hpos, ypos := 0, 0, 0; i < Y.Rows; i, hpos, ypos = i+1, hpos+H.Stride, ypos+Y.Stride {
 		rowEq := true
 		for c := 0; c < Y.Cols; c++ {
@@ -1132,12 +1151,12 @@ func accuracyScore32(Y, H blas32General) float32 {
 			N++
 		}
 	}
-	return float32(N) / float32(Y.Rows)
+	return float64(N) / float64(Y.Rows)
 
 }
 
 // SetParams allow settings params from a map. (used by Unmarshal)
-func (mlp *BaseMultilayerPerceptron32) SetParams(params map[string]interface{}) {
+func (mlp *DeepInterestNetwork) SetParams(params map[string]interface{}) {
 	r := reflect.Indirect(reflect.ValueOf(mlp))
 	for k, v := range params {
 		field := r.FieldByNameFunc(func(s string) bool {
@@ -1150,7 +1169,7 @@ func (mlp *BaseMultilayerPerceptron32) SetParams(params map[string]interface{}) 
 }
 
 // Unmarshal init params intercepts_ coefs_ from json
-func (mlp *BaseMultilayerPerceptron32) Unmarshal(buf []byte) error {
+func (mlp *DeepInterestNetwork) Unmarshal(buf []byte) error {
 	type Map = map[string]interface{}
 	mp := Map{}
 	err := json.Unmarshal(buf, &mp)
@@ -1178,9 +1197,9 @@ func (mlp *BaseMultilayerPerceptron32) Unmarshal(buf []byte) error {
 			if len(c64) == 0 {
 				return fmt.Errorf("coefs_ must be non-empty")
 			}
-			b64coefs := make([]blas64General, len(c64))
+			b64coefs := make([]blas64.General, len(c64))
 			for i := range b64coefs {
-				b64coefs[i] = Blas64FromInterface(c64[i])
+				b64coefs[i] = nn.Blas64FromInterface(c64[i])
 			}
 			mlp.NLayers = len(b64coefs) + 1
 			mlp.HiddenLayerSizes = make([]int, mlp.NLayers-2)
@@ -1198,12 +1217,12 @@ func (mlp *BaseMultilayerPerceptron32) Unmarshal(buf []byte) error {
 			mlp.initialize(mlp.NOutputs, layerUnits, true, mlp.NOutputs > 1)
 
 			for i := 0; i < mlp.NLayers-1; i++ {
-				intercept64 := Floats64FromInterface(intercepts2[i])
+				intercept64 := nn.Floats64FromInterface(intercepts2[i])
 				for off := 0; off < len(mlp.Intercepts[i]); off++ {
-					mlp.Intercepts[i][off] = float32(intercept64[off])
+					mlp.Intercepts[i][off] = float64(intercept64[off])
 				}
-				g := General32(mlp.Coefs[i])
-				(&g).Copy(General64(b64coefs[i]))
+				g := nn.General64(mlp.Coefs[i])
+				(&g).Copy(nn.General64(b64coefs[i]))
 			}
 		} else {
 			return fmt.Errorf("coefs_ must be [][][]float64, found %T", coefs)
@@ -1212,29 +1231,29 @@ func (mlp *BaseMultilayerPerceptron32) Unmarshal(buf []byte) error {
 	return err
 }
 
-// ToDense32 returns w view of m if m is a RawMatrixer, et returns a dense copy of m
-func ToDense32(m Matrix) General32 {
-	if d, ok := m.(General32); ok {
+// ToDense64 returns w view of m if m is a RawMatrixer, et returns a dense copy of m
+func ToDense64(m nn.Matrix) nn.General64 {
+	if d, ok := m.(nn.General64); ok {
 		return d
 	}
 	if m == mat.Matrix(nil) {
-		return General32{}
+		return nn.General64{}
 	}
-	if rm, ok := m.(RawMatrixer32); ok {
-		return General32(rm.RawMatrix())
+	if rm, ok := m.(nn.RawMatrixer64); ok {
+		return nn.General64(rm.RawMatrix())
 	}
-	ret := General32{}
+	ret := nn.General64{}
 	ret.Copy(m)
 	return ret
 }
 
-// FromDense32 fills dst (mat.Mutable) with src (mat.Dense)
-func FromDense32(dst Mutable, dense General32) General32 {
+// FromDense64 fills dst (mat.nn.Mutable) with src (mat.Dense)
+func FromDense64(dst nn.Mutable, dense nn.General64) nn.General64 {
 	if dst == nil {
 		return dense
 	}
 	src := dense.RawMatrix()
-	if rawmatrixer, ok := dst.(RawMatrixer32); ok {
+	if rawmatrixer, ok := dst.(nn.RawMatrixer64); ok {
 		dstmat := rawmatrixer.RawMatrix()
 		if &dstmat.Data[0] == &src.Data[0] {
 			return dense
@@ -1254,33 +1273,33 @@ func FromDense32(dst Mutable, dense General32) General32 {
 	return dense
 }
 
-// LabelBinarizer32 Binarize labels in a one-vs-all fashion
-type LabelBinarizer32 struct {
-	NegLabel, PosLabel float32
-	Classes            [][]float32
+// LabelBinarizer64 Binarize labels in a one-vs-all fashion
+type LabelBinarizer64 struct {
+	NegLabel, PosLabel float64
+	Classes            [][]float64
 }
 
-// NewLabelBinarizer32 ...
-func NewLabelBinarizer32(NegLabel, PosLabel float32) *LabelBinarizer32 {
-	return &LabelBinarizer32{NegLabel: NegLabel, PosLabel: PosLabel}
+// NewLabelBinarizer64 ...
+func NewLabelBinarizer64(NegLabel, PosLabel float64) *LabelBinarizer64 {
+	return &LabelBinarizer64{NegLabel: NegLabel, PosLabel: PosLabel}
 }
 
 // TransformerClone ...
-func (m *LabelBinarizer32) TransformerClone() *LabelBinarizer32 {
+func (m *LabelBinarizer64) TransformerClone() *LabelBinarizer64 {
 	clone := *m
 	return &clone
 }
 
 // Fit for binarizer register classes
-func (m *LabelBinarizer32) Fit(Xmatrix, Ymatrix mat.Matrix) base.Fiter {
-	Y := ToDense32(Ymatrix)
+func (m *LabelBinarizer64) Fit(Xmatrix, Ymatrix mat.Matrix) base.Fiter {
+	Y := ToDense64(Ymatrix)
 	if m.PosLabel == m.NegLabel {
 		m.PosLabel += 1.
 	}
 	y := Y.RawMatrix()
-	m.Classes = make([][]float32, y.Cols)
+	m.Classes = make([][]float64, y.Cols)
 	for j := 0; j < y.Cols; j++ {
-		cmap := make(map[float32]bool)
+		cmap := make(map[float64]bool)
 		for i, yi := 0, 0; i < y.Rows; i, yi = i+1, yi+y.Stride {
 			yval := y.Data[yi+j]
 			if _, present := cmap[yval]; present {
@@ -1289,32 +1308,34 @@ func (m *LabelBinarizer32) Fit(Xmatrix, Ymatrix mat.Matrix) base.Fiter {
 			cmap[yval] = true
 			m.Classes[j] = append(m.Classes[j], yval)
 		}
-		sort.Sort(Float32Slice(m.Classes[j]))
+		sort.Sort(Float64Slice(m.Classes[j]))
 	}
 	return m
 }
 
-// Float32Slice implements sort.Interface.
-type Float32Slice []float32
+// Float64Slice implements sort.Interface.
+type Float64Slice []float64
 
-func (p Float32Slice) Len() int           { return len(p) }
-func (p Float32Slice) Less(i, j int) bool { return p[i] < p[j] || M32.IsNaN(p[i]) && !M32.IsNaN(p[j]) }
-func (p Float32Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+func (p Float64Slice) Len() int { return len(p) }
+func (p Float64Slice) Less(i, j int) bool {
+	return p[i] < p[j] || nn.M64.IsNaN(p[i]) && !nn.M64.IsNaN(p[j])
+}
+func (p Float64Slice) Swap(i, j int) { p[i], p[j] = p[j], p[i] }
 
-// Transform for LabelBinarizer32
-func (m *LabelBinarizer32) Transform(X, Y mat.Matrix) (Xout, Yout General32) {
-	Xout = ToDense32(X)
+// Transform for LabelBinarizer64
+func (m *LabelBinarizer64) Transform(X, Y mat.Matrix) (Xout, Yout nn.General64) {
+	Xout = ToDense64(X)
 	NSamples, _ := Y.Dims()
 	NOutputs := 0
 	for _, classes := range m.Classes {
 		NOutputs += len(classes)
 	}
 
-	Yout = General32{Rows: NSamples, Cols: NOutputs, Stride: NOutputs, Data: make([]float32, NSamples*NOutputs)}
-	y, yo := ToDense32(Y).RawMatrix(), Yout.RawMatrix()
+	Yout = nn.General64{Rows: NSamples, Cols: NOutputs, Stride: NOutputs, Data: make([]float64, NSamples*NOutputs)}
+	y, yo := ToDense64(Y).RawMatrix(), Yout.RawMatrix()
 	baseCol := 0
 	for j := 0; j < y.Cols; j++ {
-		cmap := make(map[float32]int)
+		cmap := make(map[float64]int)
 		for classNo, val := range m.Classes[j] {
 			cmap[val] = classNo
 		}
@@ -1332,22 +1353,22 @@ func (m *LabelBinarizer32) Transform(X, Y mat.Matrix) (Xout, Yout General32) {
 }
 
 // FitTransform fit to data, then transform it
-func (m *LabelBinarizer32) FitTransform(X, Y mat.Matrix) (Xout, Yout General32) {
+func (m *LabelBinarizer64) FitTransform(X, Y mat.Matrix) (Xout, Yout nn.General64) {
 	m.Fit(X, Y)
 	return m.Transform(X, Y)
 }
 
-// InverseTransform for LabelBinarizer32
-func (m *LabelBinarizer32) InverseTransform(X, Y General32) (Xout, Yout General32) {
+// InverseTransform for LabelBinarizer64
+func (m *LabelBinarizer64) InverseTransform(X, Y nn.General64) (Xout, Yout nn.General64) {
 	Xout = X
 	NSamples, _ := Y.Dims()
 	NOutputs := len(m.Classes)
 
-	Yout = General32{Rows: NSamples, Cols: NOutputs, Stride: NOutputs, Data: make([]float32, NSamples*NOutputs)}
+	Yout = nn.General64{Rows: NSamples, Cols: NOutputs, Stride: NOutputs, Data: make([]float64, NSamples*NOutputs)}
 	y, yo := Y.RawMatrix(), Yout.RawMatrix()
 	for j, baseCol := 0, 0; baseCol < y.Cols; j, baseCol = j+1, baseCol+len(m.Classes[j]) {
 		for i, yi, yo0 := 0, 0, 0; i < y.Rows; i, yi, yo0 = i+1, yi+y.Stride, yo0+yo.Stride {
-			classNo := MaxIdx32(y.Data[yi+baseCol : yi+baseCol+len(m.Classes[j])])
+			classNo := nn.MaxIdx64(y.Data[yi+baseCol : yi+baseCol+len(m.Classes[j])])
 
 			yo.Data[yo0+j] = m.Classes[j][classNo]
 		}
@@ -1356,7 +1377,7 @@ func (m *LabelBinarizer32) InverseTransform(X, Y General32) (Xout, Yout General3
 	return
 }
 
-func isBinarized32(yb blas32.General) bool {
+func isBinarized64(yb blas64.General) bool {
 	for r, pos := 0, 0; r < yb.Rows; r, pos = r+1, pos+yb.Stride {
 		for c := 0; c < yb.Cols; c++ {
 			v := yb.Data[pos+c]

@@ -72,9 +72,9 @@ func axpy32(n int, alpha float32, X, Y []float32) {
 	blas32.Axpy(alpha, blas32.Vector{N: n, Inc: 1, Data: X}, blas32.Vector{N: n, Inc: 1, Data: Y})
 }
 
-// axpy64 adds x scaled by alpha to y:
+// Axpy64 adds x scaled by alpha to y:
 //  y[i] += alpha*x[i] for all i.
-func axpy64(n int, alpha float64, X, Y []float64) {
+func Axpy64(n int, alpha float64, X, Y []float64) {
 	blas64.Axpy(alpha, blas64.Vector{N: n, Data: X, Inc: 1}, blas64.Vector{N: n, Data: Y, Inc: 1})
 }
 
