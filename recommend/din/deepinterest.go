@@ -22,12 +22,12 @@ import (
 
 // DeepInterestNetwork is modified from neural_network.BaseMultilayerPerceptron64
 type DeepInterestNetwork struct {
-	Activation         string  `json:"activation"`
-	Solver             string  `json:"solver"`
-	Alpha              float64 `json:"alpha"`
-	WeightDecay        float64 `json:"weight_decay"`
-	BatchSize          int     `json:"batch_size"`
-	BatchNormalize     bool
+	Activation  string  `json:"activation"`
+	Solver      string  `json:"solver"`
+	Alpha       float64 `json:"alpha"`
+	WeightDecay float64 `json:"weight_decay"`
+	BatchSize   int     `json:"batch_size"`
+	//BatchNormalize     bool
 	LearningRate       string           `json:"learning_rate"`
 	LearningRateInit   float64          `json:"learning_rate_init"`
 	PowerT             float64          `json:"power_t"`
@@ -272,39 +272,40 @@ func (mlp *DeepInterestNetwork) forwardPass(activations []blas64.General) {
 	outputActivation(activations[i+1])
 }
 
-// batchNormalize computes norms of activations and divides activations
-func (mlp *DeepInterestNetwork) batchNormalize(activations []blas64.General) {
-	for i := 0; i < mlp.NLayers-2; i++ {
-		activation := activations[i+1]
-		batchNorm := mlp.batchNorm[i]
-		for o := 0; o < activation.Cols; o++ {
-			M := float64(0)
-			// compute max for layer i, output o
-			for r, rpos := 0, 0; r < activation.Rows; r, rpos = r+1, rpos+activation.Stride {
-				a := nn.M64.Abs(activation.Data[rpos+o])
-				if M < a {
-					M = a
-				}
-			}
-			// divide activation by max
-			if M > 0 {
-				for r, rpos := 0, 0; r < activation.Rows; r, rpos = r+1, rpos+activation.Stride {
-					activation.Data[rpos+o] /= M
-				}
-			}
-			batchNorm[o] = M
-		}
-	}
-}
-
-// batchNormalizeDeltas divides deltas by batchNorm
-func (mlp *DeepInterestNetwork) batchNormalizeDeltas(deltas blas64.General, batchNorm []float64) {
-	for r, rpos := 0, 0; r < deltas.Rows; r, rpos = r+1, rpos+deltas.Stride {
-		for o := 0; o < deltas.Cols; o++ {
-			deltas.Data[rpos+o] /= batchNorm[o]
-		}
-	}
-}
+//
+//// batchNormalize computes norms of activations and divides activations
+//func (mlp *DeepInterestNetwork) batchNormalize(activations []blas64.General) {
+//	for i := 0; i < mlp.NLayers-2; i++ {
+//		activation := activations[i+1]
+//		batchNorm := mlp.batchNorm[i]
+//		for o := 0; o < activation.Cols; o++ {
+//			M := float64(0)
+//			// compute max for layer i, output o
+//			for r, rpos := 0, 0; r < activation.Rows; r, rpos = r+1, rpos+activation.Stride {
+//				a := nn.M64.Abs(activation.Data[rpos+o])
+//				if M < a {
+//					M = a
+//				}
+//			}
+//			// divide activation by max
+//			if M > 0 {
+//				for r, rpos := 0, 0; r < activation.Rows; r, rpos = r+1, rpos+activation.Stride {
+//					activation.Data[rpos+o] /= M
+//				}
+//			}
+//			batchNorm[o] = M
+//		}
+//	}
+//}
+//
+//// batchNormalizeDeltas divides deltas by batchNorm
+//func (mlp *DeepInterestNetwork) batchNormalizeDeltas(deltas blas64.General, batchNorm []float64) {
+//	for r, rpos := 0, 0; r < deltas.Rows; r, rpos = r+1, rpos+deltas.Stride {
+//		for o := 0; o < deltas.Cols; o++ {
+//			deltas.Data[rpos+o] /= batchNorm[o]
+//		}
+//	}
+//}
 
 func (mlp *DeepInterestNetwork) sumCoefSquares() float64 {
 	s := float64(0)
@@ -328,14 +329,16 @@ func (mlp *DeepInterestNetwork) computeLossGrad(layer, NSamples int, activations
 	matRowMean64(deltas[layer], interceptGrads[layer])
 }
 
-// backprop Compute the MLP loss function and its corresponding derivatives with respect to each parameter: weights and bias vectors.
+// backprop Compute the MLP loss function and its corresponding derivatives with respect to
+// each parameter: weights and bias vectors.
 // X : blas64.General shape (nSamples, nFeatures)
 // Y : blas64.General shape (nSamples, nOutputs)
 // activations : []blas64.General, length=NLayers-1
 // deltas : []blas64.General, length=NLayers-1
 // coefGrads : []blas64.General, length=NLayers-1
 // interceptGrads : [][]float64, length=NLayers-1
-func (mlp *DeepInterestNetwork) backprop(X, y blas64.General, activations, deltas, coefGrads []blas64.General, interceptGrads [][]float64) float64 {
+func (mlp *DeepInterestNetwork) backprop(X, y blas64.General,
+	activations, deltas, coefGrads []blas64.General, interceptGrads [][]float64) float64 {
 	nSamples := X.Rows
 	if mlp.WeightDecay > 0 {
 		for iw := range mlp.packedParameters {
@@ -343,10 +346,10 @@ func (mlp *DeepInterestNetwork) backprop(X, y blas64.General, activations, delta
 		}
 	}
 	mlp.forwardPass(activations)
-	if mlp.BatchNormalize {
-		// compute norm of activations for non-terminal layers
-		mlp.batchNormalize(activations)
-	}
+	//if mlp.BatchNormalize {
+	//	// compute norm of activations for non-terminal layers
+	//	mlp.batchNormalize(activations)
+	//}
 
 	//# Get loss
 	lossFuncName := mlp.LossFuncName
@@ -390,10 +393,10 @@ func (mlp *DeepInterestNetwork) backprop(X, y blas64.General, activations, delta
 		inplaceDerivative := Derivatives64[mlp.Activation]
 		// inplaceDerivative multiplies deltas[i-1] by activation derivative
 		inplaceDerivative(activations[i], deltas[i-1])
-		if mlp.BatchNormalize {
-			// divide deltas by batchNorm
-			mlp.batchNormalizeDeltas(deltas[i-1], mlp.batchNorm[i-1])
-		}
+		//if mlp.BatchNormalize {
+		//	// divide deltas by batchNorm
+		//	mlp.batchNormalizeDeltas(deltas[i-1], mlp.batchNorm[i-1])
+		//}
 
 		mlp.computeLossGrad(
 			i-1, nSamples, activations, deltas, coefGrads,
@@ -435,10 +438,10 @@ func (mlp *DeepInterestNetwork) initialize(yCols int, layerUnits []int, isClassi
 	}
 	mem := make([]float64, off)
 	mlp.packedParameters = mem[0:off]
-	if mlp.BatchNormalize {
-		// allocate batchNorm for non-terminal layers
-		mlp.batchNorm = make([][]float64, mlp.NLayers-2)
-	}
+	//if mlp.BatchNormalize {
+	//	// allocate batchNorm for non-terminal layers
+	//	mlp.batchNorm = make([][]float64, mlp.NLayers-2)
+	//}
 
 	off = 0
 	if mlp.RandomState == (base.RandomState)(nil) {
@@ -471,9 +474,9 @@ func (mlp *DeepInterestNetwork) initialize(yCols int, layerUnits []int, isClassi
 		for pos := prevOff; pos < off; pos++ {
 			mem[pos] = rndFloat64() * initBound
 		}
-		if mlp.BatchNormalize && i < mlp.NLayers-2 {
-			mlp.batchNorm[i] = make([]float64, layerUnits[i+1])
-		}
+		//if mlp.BatchNormalize && i < mlp.NLayers-2 {
+		//	mlp.batchNorm[i] = make([]float64, layerUnits[i+1])
+		//}
 	}
 
 	mlp.BestLoss = nn.M64.Inf(1)
