@@ -18,6 +18,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
+      - name: Switch directory
+        run: cd ./frontend
+
       - name: Step pnpm
         uses: pnpm/action-setup@v2.0.1
         with:
