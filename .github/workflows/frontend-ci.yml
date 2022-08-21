@@ -10,6 +10,9 @@ on:
 jobs:
   main-deploy:
     runs-on: ubuntu-latest
+    defaults:
+       run:
+         working-directory: ./frontend
     strategy:
       matrix:
         node-version: [14]
@@ -28,9 +31,10 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'pnpm'
+          cache-dependency-path: './frontend/pnpm-lock.yaml'
 
       - name: Install dependencies
-        run: cd ./frontend && pnpm run bootstrap
+        run: pnpm run bootstrap
 
       - name: Lint
         run: pnpm run lint
