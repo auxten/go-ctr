@@ -2,7 +2,7 @@
 
 ![logo](art/logo.png)
 
-Feature-Engineering & Training & Predict all in one Recommendation System that can run on small server or edge device (Android/iOS/IoT device etc.)
+Deep Learning(Item2vec Embedding+MLP) based Feature-Engineering & Training & Predict all in one Recommendation System that can run on small server or edge device.
 
 # Demo
 
