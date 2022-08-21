@@ -56,7 +56,6 @@ export default ({ mode }: ConfigEnv) => {
       rollupOptions: {
         input: {
           main: resolve(__dirname, 'index.html'),
-          share: resolve(__dirname, 'index.share.html'),
         },
       },
     },
