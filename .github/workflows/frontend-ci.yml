@@ -30,7 +30,7 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: run: cd ./frontend && pnpm run bootstrap
+        run: cd ./frontend && pnpm run bootstrap
 
       - name: Lint
         run: pnpm run lint
