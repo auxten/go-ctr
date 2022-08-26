@@ -52,6 +52,8 @@ import {
   NUploadTrigger,
   NUploadDragger,
   NResult,
+  NH2,
+  NDivider,
 } from 'naive-ui'
 
 export default create({
@@ -108,5 +110,7 @@ export default create({
     NUploadTrigger,
     NUploadDragger,
     NResult,
+    NH2,
+    NDivider,
   ],
 })
