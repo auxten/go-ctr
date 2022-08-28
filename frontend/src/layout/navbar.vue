@@ -109,10 +109,6 @@ const toggleSideBar = () => {
     }
   }
 
-  .breadcrumb-container {
-    float: left;
-  }
-
   .errLog-container {
     display: inline-block;
     vertical-align: top;

@@ -1,16 +1,22 @@
 <template>
   <n-breadcrumb class="app-breadcrumb">
-    <n-breadcrumb-item v-for="(item, index) in levelList" :key="item.path">
-      <span
-        v-if="item.redirect === 'noRedirect' || index === levelList.length - 1"
-        class="no-redirect"
+    <transition-group name="breadcrumb">
+      <n-breadcrumb-item
+        v-for="(item, index) in levelList"
+        :key="item.path"
+        style="display: inline-block;"
       >
-        {{ item.meta.title }}
-      </span>
-      <a v-else @click.prevent="handleLink(item)">
-        {{ item.meta.title }}
-      </a>
-    </n-breadcrumb-item>
+        <span
+          v-if="item.redirect === 'noRedirect' || index === levelList.length - 1"
+          class="no-redirect"
+        >
+          {{ item.meta.title }}
+        </span>
+        <a v-else @click.prevent="handleLink(item)">
+          {{ item.meta.title }}
+        </a>
+      </n-breadcrumb-item>
+    </transition-group>
   </n-breadcrumb>
 </template>
 
@@ -64,8 +70,9 @@ getBreadcrumb()
 .app-breadcrumb {
   display: inline-block;
   font-size: 14px;
-  line-height: 42px;
   margin-left: 8px;
+  height: 50px;
+  line-height: 50px;
 
   .no-redirect {
     color: #97a8be;

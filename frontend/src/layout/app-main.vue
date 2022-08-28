@@ -1,6 +1,6 @@
 <template>
   <section class="app-main">
-    <router-view v-slot="{ Component }" :key="key">
+    <router-view v-slot="{ Component }">
       <transition name="fade-transform" mode="out-in">
         <keep-alive :include="cachedViews">
           <component :is="Component" />
@@ -13,16 +13,13 @@
 
 <script lang="ts" setup>
 import { computed } from 'vue'
-import { useRoute } from 'vue-router'
 import { useTagsViewStore } from '@/store/tags-view'
 
-const route = useRoute()
 const tagsViewStore = useTagsViewStore()
 
 const cachedViews = computed(() => {
   return tagsViewStore.cachedViews
 })
-const key = computed(() => route.path)
 </script>
 
 
