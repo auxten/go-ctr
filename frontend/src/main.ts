@@ -1,7 +1,7 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 
-import NaiveUI from '@/components/naive-ui'
+import NaiveUI from 'naive-ui'
 import '@/styles/index.scss'
 
 import GUI from '@/components'

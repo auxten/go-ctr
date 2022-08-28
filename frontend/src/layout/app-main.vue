@@ -29,6 +29,8 @@ const cachedViews = computed(() => {
   width: 100%;
   position: relative;
   overflow: hidden;
+  background-color: #f0f2f5;
+  padding: 20px 24px;
 }
 </style>
 

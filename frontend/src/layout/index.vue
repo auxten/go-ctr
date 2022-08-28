@@ -1,13 +1,15 @@
 <template>
   <n-layout has-sider :class="classObj" class="app-wrapper">
     <sidebar />
-    <n-layout :class="{hasTagsView: settingStore.tagsView}">
+    <n-layout
+      :class="{ hasTagsView: settingStore.tagsView }"
+      class="app-body"
+    >
       <n-layout-header :class="{'fixed-header': settingStore.fixedHeader}">
         <navbar />
         <tags-view v-if="settingStore.tagsView" />
       </n-layout-header>
       <n-layout-content
-        content-style="padding: 20px 24px;"
         class="app-content"
         style="margin-top: 4px;"
       >
@@ -54,6 +56,10 @@ const classObj = computed(() => {
     display: table;
     clear: both;
   }
+}
+
+.app-body {
+  background-color: #f0f2f5;
 }
 
 .fixed-header {
