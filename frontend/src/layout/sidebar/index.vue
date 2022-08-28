@@ -70,7 +70,6 @@ const getIcon = (name: string) => {
 const menuOptions = asyncRoutes.map(m => {
   return {
     key: router.resolve({ name: m.name }).path,
-    label: m.name,
     icon: getIcon(m.name as string),
     label: () =>
       h(RouterLink, {
