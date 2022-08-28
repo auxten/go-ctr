@@ -37,7 +37,6 @@ const routes: Array<RouteRecordRaw> = [
   },
   {
     path: '/admin',
-    name: 'Admin',
     redirect: 'noRedirect',
     component: () => import('@/layout/index.vue'),
     meta: { title: 'Admin', breadcrumb: false },
@@ -45,13 +44,11 @@ const routes: Array<RouteRecordRaw> = [
   },
   {
     path: '/login',
-    name: 'Login',
     component: () => import('@/views/login/index.vue'),
     meta: { title: 'Login' },
   },
   {
     path: '/:catchAll(.*)*',
-    name: 'NotFound',
     component: () => import('@/views/error/index.vue'),
     meta: { title: 'NotFound' },
   },
