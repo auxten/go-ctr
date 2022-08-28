@@ -54,6 +54,13 @@ import {
   NResult,
   NH2,
   NDivider,
+  NMenu,
+  NBreadcrumb,
+  NBreadcrumbItem,
+  NLayoutHeader,
+  NLayoutContent,
+  NLayoutFooter,
+  NLayoutSider,
 } from 'naive-ui'
 
 export default create({
@@ -112,5 +119,12 @@ export default create({
     NResult,
     NH2,
     NDivider,
+    NMenu,
+    NBreadcrumb,
+    NBreadcrumbItem,
+    NLayoutHeader,
+    NLayoutContent,
+    NLayoutFooter,
+    NLayoutSider,
   ],
 })
