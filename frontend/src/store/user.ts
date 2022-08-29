@@ -11,8 +11,15 @@ export const useUserStore = defineStore('user', {
   }),
   actions: {
     async login(username: string, password: string) {
+      const time = Date.now()
+      const token = window.btoa(`${time},${username}${password}`)
+      this.token = token
+      localStorage.setItem(TokenKey, token)
+
+      this.name = username
     },
     async getUserInfo() {
+      this.role = 1
     },
     resetToken() {
       this.token = ''
@@ -20,9 +27,15 @@ export const useUserStore = defineStore('user', {
     },
     isLogin() {
       const token = localStorage.getItem(TokenKey)
-      return !!token
+      if (token) {
+        const time = parseInt(window.atob(token))
+        const diff = Date.now() - time
+        return diff < 3 * 24 * 60 * 60 * 1000
+      }
+      return false
     },
     async logout() {
+      this.resetToken()
     },
   },
 })

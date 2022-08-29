@@ -17,6 +17,7 @@
     "prepare": "cd .. && husky install frontend/.husky"
   },
   "dependencies": {
+    "@vicons/ionicons5": "^0.12.0",
     "@vueuse/core": "^8.9.4",
     "axios": "~0.27.2",
     "dayjs": "~1.11.4",
