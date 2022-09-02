@@ -202,6 +202,9 @@ func (recSys *RecSysImpl) GetUserFeature(ctx context.Context, userId int) (tenso
 	}
 
 	tensor = utils.ConcatSlice(rcmd.Tensor{avgRating.Float64 / 5., cntRating.Float64 / 100.}, top5GenresTensor[:])
+	if rcmd.DebugItemId != 0 && userId == rcmd.DebugUserId {
+		log.Infof("user %d: %v ", userId, tensor)
+	}
 	return
 }
 
