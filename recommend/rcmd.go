@@ -28,6 +28,8 @@ const (
 var (
 	itemEmbeddingModel model.Model
 	itemEmbeddingMap   word2vec.EmbeddingMap
+	DebugUserId        int
+	DebugItemId        int
 )
 
 type Tensor []float64
@@ -172,6 +174,11 @@ func Rank(ctx context.Context, recSys Predictor, userId int, itemIds []int) (ite
 
 		score := recSys.Predict(x, y)
 		itemScores[i] = ItemScore{itemId, score.At(0, 0)}
+		if (DebugItemId == 0 || DebugItemId == itemIds[i]) &&
+			(DebugUserId == 0 || DebugUserId == userId) {
+			log.Infof("user %d: %v\nitem %d: %v\nscore %f",
+				userId, userFeature, itemIds[i], itemFeature, score.At(0, 0))
+		}
 	}
 	return
 }

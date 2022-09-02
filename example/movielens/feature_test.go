@@ -14,6 +14,9 @@ import (
 )
 
 func TestFeatureEngineer(t *testing.T) {
+	rcmd.DebugUserId = 429
+	rcmd.DebugItemId = 588
+
 	var (
 		recSys = &RecSysImpl{
 			DataPath:  "movielens.db",
@@ -27,7 +30,7 @@ func TestFeatureEngineer(t *testing.T) {
 		"relu", "adam", 1e-5,
 	)
 	fiter.Verbose = true
-	fiter.MaxIter = 100
+	fiter.MaxIter = 10
 	fiter.LearningRate = "adaptive"
 	fiter.LearningRateInit = .0025
 
