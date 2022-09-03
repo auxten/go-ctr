@@ -47,12 +47,12 @@ func TestFeatureEngineer(t *testing.T) {
 			itemId   int
 			expected float64
 		}{
-			{429, 588, 1.},
-			{429, 22, 1.},
-			{107, 1, 1.},
-			{107, 2, 1.},
-			{191, 39, 0.},
-			{11, 1391, 0.},
+			{8, 527, 1.},
+			{8, 432, 0.},
+			{106, 318, 1.},
+			{106, 31696, 0.},
+			{111, 588, 1.},
+			{111, 51086, 0.},
 		}
 
 		var (
@@ -76,7 +76,7 @@ func TestFeatureEngineer(t *testing.T) {
 	})
 
 	Convey("test set ROC AUC", t, func() {
-		testCount := 20888
+		testCount := 20600
 		rows, err := db.Query(
 			"SELECT userId, movieId, rating FROM ratings_test ORDER BY timestamp, userId ASC LIMIT ?", testCount)
 		So(err, ShouldBeNil)
