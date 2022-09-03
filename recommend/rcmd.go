@@ -65,6 +65,51 @@ type ItemFeaturer interface {
 	GetItemFeature(context.Context, int) (Tensor, error)
 }
 
+type FeatureOverviewStringer interface {
+	String() string
+}
+
+type UserItemOverview struct {
+	UserId       int `json:"user_id"`
+	UserFeatures map[string]FeatureOverview
+}
+
+type ItemOverView struct {
+	ItemId       int `json:"item_id"`
+	ItemFeatures map[string]FeatureOverview
+}
+
+type UserItemOverviewResult struct {
+	Offset int                `json:"offset"`
+	Size   int                `json:"size"`
+	Users  []UserItemOverview `json:"users"`
+}
+
+type ItemOverviewResult struct {
+	Offset int            `json:"offset"`
+	Size   int            `json:"size"`
+	Items  []ItemOverView `json:"items"`
+}
+
+type DashboardOverviewResult struct {
+	Users         int `json:"users"`
+	Items         int `json:"items"`
+	TotalPositive int `json:"total_positive"`
+	ValidPositive int `json:"valid_positive"`
+	ValidNegative int `json:"valid_negative"`
+}
+
+type FeatureOverview interface {
+	// offset and size use for paging query
+	GetUsersFeatureOverview(ctx context.Context, offset int, size int, opts map[string][]string) UserItemOverviewResult
+
+	// offset and size use for paging query
+	GetItemsFeatureOverview(ctx context.Context, offset int, size int, opts map[string][]string) ItemOverviewResult
+
+	// GetDashboardOverview
+	GetDashboardOverview(ctx context.Context) DashboardOverviewResult
+}
+
 type PreRanker interface {
 	PreRank(context.Context) error
 }
@@ -127,7 +172,7 @@ func Train(ctx context.Context, recSys RecSys, mlp base.Fiter) (model Predictor,
 		yClass.Set(i, 0, sample.Response[0])
 	}
 
-	//start training
+	// start training
 	log.Infof("\nstart training with %d samples\n", sampleLen)
 	mlp.Fit(sampleDense, yClass)
 	type modelImpl struct {
