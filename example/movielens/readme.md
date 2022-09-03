@@ -3,13 +3,13 @@
 Original Data: [MovieLens 100k](https://grouplens.org/datasets/movielens/100k/)
 
 SQLite DB file:
-[movielens.db.zip](https://github.com/auxten/edgeRec/files/9283279/movielens.db.zip)
+[movielens.db.zip](https://github.com/auxten/edgeRec/files/9482338/movielens.db.zip)
 
 To run the tests, you need download the SQLite DB file and put it in the current directory.
 
 ```shell
 # download and unzip the SQLite DB file
-wget https://github.com/auxten/edgeRec/files/9283279/movielens.db.zip && unzip movielens.db.zip
+wget https://github.com/auxten/edgeRec/files/9482338/movielens.db.zip && unzip movielens.db.zip
 ```
 
 SQL that split training set and test set by 80% and 20% user:
