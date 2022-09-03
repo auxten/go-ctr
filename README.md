@@ -10,7 +10,7 @@ You can run the MovieLens training and predict demo by:
 
 ```shell
 # download and unzip the SQLite DB file
-wget https://github.com/auxten/edgeRec/files/9283279/movielens.db.zip && \
+wget https://github.com/auxten/edgeRec/files/9482338/movielens.db.zip && \
   unzip movielens.db.zip
 # compile the edgeRec and put it in the current directory
 GOBIN=`pwd` go install github.com/auxten/edgeRec@latest && \
