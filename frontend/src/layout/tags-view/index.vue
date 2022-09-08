@@ -1,34 +1,37 @@
 <template>
-  <div id="tags-view-container" class="tags-view-container">
-    <div ref="scrollPane" class="tags-view-wrapper">
-      <router-link
-        v-for="tag in visitedViews"
-        :key="tag.path"
-        v-slot="{ navigate }"
-        :to="{
-          path: tag.path,
-          query: tag.query,
-        }"
-        custom
-      >
-        <span
-          :class="isActive(tag)?'active':''"
-          class="tags-view-item"
-          @click="navigate"
+  <div ref="tagsViewRef" class="tags-view-container">
+    <n-scrollbar ref="scrollbarRef" x-scrollable>
+      <div class="tags-view-wrapper">
+        <router-link
+          v-for="tag in visitedViews"
+          :key="tag.path"
+          v-slot="{ navigate }"
+          ref="tagRefs"
+          :to="{
+            path: tag.path,
+            query: tag.query,
+          }"
+          custom
         >
-          {{ tag.title }}
-          <n-icon
-            v-if="!isAffix(tag)"
-            class="icon-btn-close"
-            @click.prevent.stop="closeSelectedTag(tag)"
+          <span
+            :class="isActive(tag) ? 'active' : ''"
+            class="tags-view-item"
+            @click="navigate"
+            @contextmenu.prevent.stop="openMenu(tag,$event)"
           >
-            <CloseOutline />
-          </n-icon>
-        </span>
-      </router-link>
-    </div>
+            {{ tag.title }}
+            <n-icon
+              v-if="!isAffix(tag)"
+              class="icon-btn-close"
+              @click.prevent.stop="closeSelectedTag(tag)"
+            >
+              <CloseOutline />
+            </n-icon>
+          </span>
+        </router-link>
+      </div>
+    </n-scrollbar>
     <ul v-show="visible" :style="{left:left+'px',top:top+'px'}" class="contextmenu">
-      <li @click="refreshSelectedTag(selectedTag)">Refresh</li>
       <li v-if="!isAffix(selectedTag)" @click="closeSelectedTag(selectedTag)">Close</li>
       <li @click="closeOthersTags">Close Others</li>
       <li @click="closeAllTags(selectedTag)">Close All</li>
@@ -38,7 +41,7 @@
 
 <script lang="ts" setup>
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { RouteRecordRaw, useRoute, useRouter } from 'vue-router'
 import { CloseOutline } from '@vicons/ionicons5'
 import { useTagsViewStore } from '@/store/tags-view'
 import { asyncRoutes } from '@/routes'
@@ -46,6 +49,10 @@ import { asyncRoutes } from '@/routes'
 const route = useRoute()
 const router = useRouter()
 const tagsViewStore = useTagsViewStore()
+
+const tagsViewRef = ref(null)
+const scrollbarRef = ref(null)
+const tagRefs = ref([])
 
 const visible = ref(false)
 const top = ref(0)
@@ -65,16 +72,18 @@ const isActive = cur => {
   return cur.path === route.path
 }
 
-const filterAffixTags = routes => {
+const filterAffixTags = (routes: RouteRecordRaw[]) => {
   let tags = []
-  routes.forEach(route => {
-    if (route.meta && route.meta.affix) {
-      const tag = router.resolve(route)
+  routes.forEach(m => {
+    const item = (m.children && m.children.length === 1)
+      ? m.children[0] : m
+    if (item.meta && item.meta.affix) {
+      const tag = router.resolve(item)
       tags.push({
         fullPath: tag.fullPath,
         path: tag.path,
-        name: route.name,
-        meta: { ...route.meta },
+        name: item.name,
+        meta: { ...item.meta },
       })
     }
   })
@@ -98,14 +107,21 @@ const addTags = () => {
   return false
 }
 
-const refreshSelectedTag = view => {
-  tagsViewStore.delCachedView(view).then(() => {
-    const { fullPath } = view
-    nextTick(() => {
-      router.replace({
-        path: `/redirect${fullPath}`,
-      })
-    })
+const moveToCurrentTag = () => {
+  const tags = tagRefs.value
+  nextTick(() => {
+    for (const tag of tags) {
+      if (tag.to.path === route.path) {
+        scrollbarRef.value.scrollTo({
+          left: tag.$el.nextSibling.offsetLeft,
+        })
+        // when query is different then update
+        if (tag.to.fullPath !== route.fullPath) {
+          tagsViewStore.updateVisitedView(route)
+        }
+        break
+      }
+    }
   })
 }
 
@@ -120,7 +136,9 @@ const closeSelectedTag = view => {
 const closeOthersTags = () => {
   router.push(selectedTag.value)
   tagsViewStore.delOthersViews(selectedTag.value)
-    .then(() => {})
+    .then(() => {
+      moveToCurrentTag()
+    })
 }
 
 const closeAllTags = view => {
@@ -141,11 +159,29 @@ const toLastView = (visitedViews, view) => {
     // you can adjust it according to your needs.
     if (view.name === 'Overview') {
       // to reload home page
-      router.replace({ path: `/redirect${  view.fullPath}` })
+      router.replace({ path: `/redirect${view.fullPath}` })
     } else {
       router.push('/')
     }
   }
+}
+
+const openMenu = (tag, e) => {
+  const menuMinWidth = 105
+  const offsetLeft = tagsViewRef.value.getBoundingClientRect().left // container margin left
+  const offsetWidth = tagsViewRef.value.offsetWidth // container width
+  const maxLeft = offsetWidth - menuMinWidth // left boundary
+  const _left = e.clientX - offsetLeft + 15 // 15: margin right
+
+  if (_left > maxLeft) {
+    left.value = maxLeft
+  } else {
+    left.value = _left
+  }
+
+  top.value = e.clientY
+  visible.value = true
+  selectedTag.value = tag
 }
 
 const closeMenu = () => {
@@ -154,6 +190,7 @@ const closeMenu = () => {
 
 watch(route, () => {
   addTags()
+  moveToCurrentTag()
 })
 
 watch(visible, val => {
@@ -182,6 +219,9 @@ onMounted(() => {
   box-shadow: 0 1px 3px 0 rgb(0 0 0 / 12%), 0 0 3px 0 rgb(0 0 0 / 4%);
 
   .tags-view-wrapper {
+    display: flex;
+    flex-wrap: nowrap;
+
     .tags-view-item {
       display: inline-block;
       position: relative;
@@ -195,6 +235,7 @@ onMounted(() => {
       font-size: 12px;
       margin-left: 5px;
       margin-top: 4px;
+      white-space: nowrap;
 
       &:first-of-type {
         margin-left: 15px;

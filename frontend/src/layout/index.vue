@@ -4,6 +4,7 @@
     <n-layout
       :class="{ hasTagsView: settingStore.tagsView }"
       class="app-body"
+      content-style="height: calc(100% + 4px);"
     >
       <n-layout-header :class="{'fixed-header': settingStore.fixedHeader}">
         <navbar />
@@ -58,7 +59,8 @@ const classObj = computed(() => {
   }
 }
 
-.app-body {
+.app-body,
+.app-content {
   background-color: #f0f2f5;
 }
 
@@ -68,6 +70,7 @@ const classObj = computed(() => {
   right: 0;
   z-index: 9;
   width: calc(100% - 210px);
+  transition: all 0.3s var(--n-bezier);
 }
 
 .hideSidebar .fixed-header {
@@ -75,17 +78,22 @@ const classObj = computed(() => {
 }
 
 .fixed-header + .app-content {
-  padding-top: 50px;
+  padding-top: 46px;
 }
 
 .hasTagsView {
   .app-content {
-    /* 86 = navbar + tags-view = 50 + 36 */
     min-height: calc(100vh - 86px);
   }
 
   .fixed-header + .app-content {
     padding-top: 86px;
   }
+}
+</style>
+
+<style>
+.showRightPanel .fixed-header {
+  transition: none;
 }
 </style>
