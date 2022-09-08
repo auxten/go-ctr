@@ -6,24 +6,87 @@ import { useUserStore } from '@/store/user'
 const { loadingBar } = createDiscreteApi(['loadingBar'])
 
 export const asyncRoutes: Array<RouteRecordRaw> = [
+  // {
+  //   path: '/overview',
+  //   name: 'Overview',
+  //   // alias: ['/', '/home'],
+  //   component: () => import('@/views/overview/index.vue'),
+  //   meta: { title: 'Overview', affix: true },
+  // },
+  // {
+  //   path: 'users',
+  //   name: 'Users',
+  //   component: () => import('@/views/users/index.vue'),
+  //   meta: { title: 'Users' },
+  // },
+  // {
+  //   path: 'items',
+  //   name: 'Items',
+  //   component: () => import('@/views/items/index.vue'),
+  //   meta: { title: 'Items' },
+  // },
+
   {
-    path: 'overview',
-    name: 'Overview',
-    // alias: ['/', '/home'],
-    component: () => import('@/views/overview/index.vue'),
-    meta: { title: 'Overview', affix: true },
+    path: '/dashboard',
+    redirect: '/dashboard/overview',
+    component: () => import('@/layout/index.vue'),
+    name: 'Dashboard',
+    meta: { title: 'Overview', breadcrumb: false },
+    children: [
+      {
+        path: 'overview',
+        name: 'Overview',
+        // alias: ['/', '/home'],
+        component: () => import('@/views/overview/index.vue'),
+        meta: { title: 'Overview', affix: true },
+      },
+    ],
   },
+
   {
-    path: 'users',
+    path: '/users',
+    component: () => import('@/layout/index.vue'),
+    redirect: '/users/list',
     name: 'Users',
-    component: () => import('@/views/users/index.vue'),
     meta: { title: 'Users' },
+    children: [
+      {
+        path: 'list',
+        component: () => import('@/views/users/index.vue'),
+        name: 'UserList',
+        meta: { title: 'User List' },
+      },
+      {
+        path: 'detail/:id(\\d+)',
+        component: () => import('@/views/users/detail.vue'),
+        name: 'UserDetail',
+        props: true,
+        meta: { title: 'User Detail', noCache: true, activeMenu: '/users/list' },
+      },
+    ],
   },
+
   {
-    path: 'items',
+    path: '/items',
+    component: () => import('@/layout/index.vue'),
+    redirect: '/items/list',
     name: 'Items',
-    component: () => import('@/views/items/index.vue'),
     meta: { title: 'Items' },
+    children: [
+      {
+        path: 'list',
+        component: () => import('@/views/items/index.vue'),
+        name: 'ItemList',
+        meta: { title: 'Item List' },
+      },
+      {
+        path: 'detail/:id(\\d+)',
+        component: () => import('@/views/items/detail.vue'),
+        name: 'ItemDetail',
+        props: true,
+        meta: { title: 'Item Detail', noCache: true, activeMenu: '/items/list' },
+      },
+    ],
   },
 ]
 
@@ -35,13 +98,7 @@ const routes: Array<RouteRecordRaw> = [
       name: 'Overview',
     },
   },
-  {
-    path: '/admin',
-    redirect: 'noRedirect',
-    component: () => import('@/layout/index.vue'),
-    meta: { title: 'Admin', breadcrumb: false },
-    children: [...asyncRoutes],
-  },
+  ...asyncRoutes,
   {
     path: '/login',
     component: () => import('@/views/login/index.vue'),

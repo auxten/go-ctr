@@ -7,7 +7,7 @@
             <n-number-animation
               show-separator
               :from="0"
-              :to="1000"
+              :to="dataMap.users"
             />
           </n-statistic>
         </n-card>
@@ -18,7 +18,7 @@
             <n-number-animation
               show-separator
               :from="0"
-              :to="10000"
+              :to="dataMap.items"
             />
           </n-statistic>
         </n-card>
@@ -29,7 +29,7 @@
             <n-number-animation
               show-separator
               :from="0"
-              :to="100000"
+              :to="dataMap.total_positive"
             />
           </n-statistic>
         </n-card>
@@ -40,7 +40,7 @@
             <n-number-animation
               show-separator
               :from="0"
-              :to="1000000"
+              :to="dataMap.valid_positive"
             />
           </n-statistic>
         </n-card>
@@ -51,158 +51,181 @@
             <n-number-animation
               show-separator
               :from="0"
-              :to="10000000"
+              :to="dataMap.valid_negative"
             />
           </n-statistic>
         </n-card>
       </n-gi>
     </n-grid>
-    <n-card
+    <!-- <n-card
       title="Positive Feedback Rate"
-      :segmented="{
-        content: true,
-      }"
+      :segmented="{ content: true }"
       hoverable
       content-style="padding: 0;"
     >
       <div :id="chartId" class="chart-box"></div>
-    </n-card>
+    </n-card> -->
   </n-space>
 </template>
 
 <script lang="ts" setup>
-import { onMounted, shallowRef } from 'vue'
-import * as echarts from 'echarts/core'
-import {
-  GridComponent,
-  LegendComponent,
-  TooltipComponent,
-} from 'echarts/components'
-import { LineChart } from 'echarts/charts'
-import { CanvasRenderer } from 'echarts/renderers'
-import { UniversalTransition } from 'echarts/features'
-import { debounce } from 'lodash-es'
-import { off, on } from '@/utils/dom-util'
+import { onMounted, ref } from 'vue'
+import { useMessage } from 'naive-ui'
+import { fetchOverview } from '@/api'
+// import * as echarts from 'echarts/core'
+// import {
+//   GridComponent,
+//   LegendComponent,
+//   TooltipComponent,
+// } from 'echarts/components'
+// import { LineChart } from 'echarts/charts'
+// import { CanvasRenderer } from 'echarts/renderers'
+// import { UniversalTransition } from 'echarts/features'
+// import { debounce } from 'lodash-es'
+// import { off, on } from '@/utils/dom-util'
 
-echarts.use([
-  GridComponent,
-  LegendComponent,
-  TooltipComponent,
-  LineChart,
-  CanvasRenderer,
-  UniversalTransition,
-])
+// echarts.use([
+//   GridComponent,
+//   LegendComponent,
+//   TooltipComponent,
+//   LineChart,
+//   CanvasRenderer,
+//   UniversalTransition,
+// ])
 
-const chartId = 'myChart'
-const chartIns = shallowRef<echarts.ECharts | null>(null)
 
-const initChart = (data1: any[], data2: any[]) => {
-  const chartDom = document.getElementById(chartId)
-  const chart = echarts.init(chartDom)
-  chart.setOption({
-    grid: {
-      top: 36,
-      left: '3%',
-      right: '4%',
-      bottom: '3%',
-      containLabel: true,
-    },
-    tooltip: {
-      trigger: 'axis',
-    },
-    legend: {
-      data: ['like', 'star'],
-    },
-    xAxis: {
-      type: 'category',
-      // name: 'like',
-      // nameLocation: 'middle',
-      // nameGap: 30,
-      // nameTextStyle: {
-      //   color: '#636366',
-      // },
-      boundaryGap: false,
-      axisLabel: {
-        color: '#666',
-        rotate: 45,
-        // formatter(text) {
-        //   return parseFloat(text).toFixed(1)
-        // },
-      },
-      axisLine: {
-        show: true,
-        lineStyle: {
-          color: 'rgba(0, 0, 0, 0.1)',
-        },
-      },
-      data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-    },
-    yAxis: {
-      type: 'value',
-      // name: '',
-      // nameLocation: 'middle',
-      // nameGap: 40,
-      // nameTextStyle: {
-      //   color: '#636366',
-      // },
-      axisLabel: {
-        color: '#666',
-      },
-      axisLine: {
-        show: true,
-        lineStyle: {
-          color: 'rgba(0, 0, 0, 0.1)',
-        },
-      },
-      splitLine: {
-        show: true,
-        lineStyle: {
-          color: 'rgba(0, 0, 0, 0.05)',
-        },
-      },
-    },
-    series: [
-      {
-        name: 'like',
-        type: 'line',
-        showSymbol: false,
-        smooth: true,
-        lineStyle: {
-          color: '#ff6384',
-        },
-        itemStyle: {
-          color: '#ff6384',
-        },
-        data: [120, 132, 101, 134, 90, 230, 210],
-      },
-      {
-        name: 'star',
-        type: 'line',
-        showSymbol: false,
-        smooth: true,
-        lineStyle: {
-          color: '#36a2eb',
-        },
-        itemStyle: {
-          color: '#36a2eb',
-        },
-        data: [220, 182, 191, 234, 290, 330, 310],
-      },
-    ],
-  })
+const nMessage = useMessage()
 
-  chartIns.value = chart
+const dataMap = ref({
+  users: 0,
+  items: 0,
+  total_positive: 0,
+  valid_positive: 0,
+  valid_negative: 0,
+})
+
+// const chartId = 'myChart'
+// const chartIns = shallowRef<echarts.ECharts | null>(null)
+
+// const initChart = (data1: any[], data2: any[]) => {
+//   const chartDom = document.getElementById(chartId)
+//   const chart = echarts.init(chartDom)
+//   chart.setOption({
+//     grid: {
+//       top: 36,
+//       left: '3%',
+//       right: '4%',
+//       bottom: '3%',
+//       containLabel: true,
+//     },
+//     tooltip: {
+//       trigger: 'axis',
+//     },
+//     legend: {
+//       data: ['like', 'star'],
+//     },
+//     xAxis: {
+//       type: 'category',
+//       // name: 'like',
+//       // nameLocation: 'middle',
+//       // nameGap: 30,
+//       // nameTextStyle: {
+//       //   color: '#636366',
+//       // },
+//       boundaryGap: false,
+//       axisLabel: {
+//         color: '#666',
+//         rotate: 45,
+//         // formatter(text) {
+//         //   return parseFloat(text).toFixed(1)
+//         // },
+//       },
+//       axisLine: {
+//         show: true,
+//         lineStyle: {
+//           color: 'rgba(0, 0, 0, 0.1)',
+//         },
+//       },
+//       data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+//     },
+//     yAxis: {
+//       type: 'value',
+//       // name: '',
+//       // nameLocation: 'middle',
+//       // nameGap: 40,
+//       // nameTextStyle: {
+//       //   color: '#636366',
+//       // },
+//       axisLabel: {
+//         color: '#666',
+//       },
+//       axisLine: {
+//         show: true,
+//         lineStyle: {
+//           color: 'rgba(0, 0, 0, 0.1)',
+//         },
+//       },
+//       splitLine: {
+//         show: true,
+//         lineStyle: {
+//           color: 'rgba(0, 0, 0, 0.05)',
+//         },
+//       },
+//     },
+//     series: [
+//       {
+//         name: 'like',
+//         type: 'line',
+//         showSymbol: false,
+//         smooth: true,
+//         lineStyle: {
+//           color: '#ff6384',
+//         },
+//         itemStyle: {
+//           color: '#ff6384',
+//         },
+//         data: [120, 132, 101, 134, 90, 230, 210],
+//       },
+//       {
+//         name: 'star',
+//         type: 'line',
+//         showSymbol: false,
+//         smooth: true,
+//         lineStyle: {
+//           color: '#36a2eb',
+//         },
+//         itemStyle: {
+//           color: '#36a2eb',
+//         },
+//         data: [220, 182, 191, 234, 290, 330, 310],
+//       },
+//     ],
+//   })
+
+//   chartIns.value = chart
+// }
+
+// const resizeChart = debounce(() => {
+//   chartIns.value?.resize()
+// }, 300)
+
+const getOverview = async () => {
+  try {
+    const res = await fetchOverview()
+    if (res.data) {
+      dataMap.value = res.data
+    }
+  } catch (error) {
+    nMessage.error(error.toString())
+  }
 }
 
-const resizeChart = debounce(() => {
-  chartIns.value?.resize()
-}, 300)
-
 onMounted(() => {
-  off(window, 'resize', resizeChart)
-  on(window, 'resize', resizeChart)
+  // off(window, 'resize', resizeChart)
+  // on(window, 'resize', resizeChart)
 
-  initChart([], [])
+  // initChart([], [])
+  getOverview()
 })
 </script>
 

@@ -22,6 +22,14 @@ export default ({ mode }: ConfigEnv) => {
     server: {
       host: '0.0.0.0',
       port: 8090,
+      proxy: {
+        '/service/': {
+          target: env.VITE_APP_BASE_API,
+          changeOrigin: true,
+          // autoRewrite: true,
+          rewrite: (path: string) => path.replace(/^\/service/, '/'),
+        },
+      },
     },
     resolve: {
       alias: {
@@ -42,10 +50,8 @@ export default ({ mode }: ConfigEnv) => {
         'echarts',
         'lodash-es',
         'naive-ui',
-        'particles.vue3',
         'shortid',
         'vue',
-        'vue-echarts',
         'vue-router',
       ],
       exclude: [],
