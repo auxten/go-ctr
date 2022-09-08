@@ -12,6 +12,10 @@ cd frontend
 # install dependencies
 pnpm run bootstrap
 
-# run
+# preview
+pnpm run build
+pnpm run serve
+
+# develop
 pnpm run dev
 ```
