@@ -45,6 +45,7 @@ type RecSys interface {
 	UserFeaturer
 	ItemFeaturer
 	Trainer
+	FeatureOverview
 }
 
 type Predictor interface {
@@ -65,30 +66,22 @@ type ItemFeaturer interface {
 	GetItemFeature(context.Context, int) (Tensor, error)
 }
 
-type FeatureOverviewStringer interface {
-	String() string
-}
-
 type UserItemOverview struct {
 	UserId       int `json:"user_id"`
-	UserFeatures map[string]FeatureOverview
+	UserFeatures map[string]interface{}
 }
 
 type ItemOverView struct {
 	ItemId       int `json:"item_id"`
-	ItemFeatures map[string]FeatureOverview
+	ItemFeatures map[string]interface{}
 }
 
 type UserItemOverviewResult struct {
-	Offset int                `json:"offset"`
-	Size   int                `json:"size"`
-	Users  []UserItemOverview `json:"users"`
+	Users []UserItemOverview `json:"users"`
 }
 
 type ItemOverviewResult struct {
-	Offset int            `json:"offset"`
-	Size   int            `json:"size"`
-	Items  []ItemOverView `json:"items"`
+	Items []ItemOverView `json:"items"`
 }
 
 type DashboardOverviewResult struct {
@@ -101,13 +94,13 @@ type DashboardOverviewResult struct {
 
 type FeatureOverview interface {
 	// offset and size use for paging query
-	GetUsersFeatureOverview(ctx context.Context, offset int, size int, opts map[string][]string) UserItemOverviewResult
+	GetUsersFeatureOverview(ctx context.Context, offset, size int, opts map[string][]string) (UserItemOverviewResult, error)
 
 	// offset and size use for paging query
-	GetItemsFeatureOverview(ctx context.Context, offset int, size int, opts map[string][]string) ItemOverviewResult
+	GetItemsFeatureOverview(ctx context.Context, offset, size int, opts map[string][]string) (ItemOverviewResult, error)
 
 	// GetDashboardOverview
-	GetDashboardOverview(ctx context.Context) DashboardOverviewResult
+	GetDashboardOverview(ctx context.Context) (DashboardOverviewResult, error)
 }
 
 type PreRanker interface {
@@ -179,11 +172,13 @@ func Train(ctx context.Context, recSys RecSys, mlp base.Fiter) (model Predictor,
 		UserFeaturer
 		ItemFeaturer
 		base.Predicter
+		FeatureOverview
 	}
 	model = &modelImpl{
-		UserFeaturer: recSys,
-		ItemFeaturer: recSys,
-		Predicter:    mlp.(base.Predicter),
+		UserFeaturer:    recSys,
+		ItemFeaturer:    recSys,
+		Predicter:       mlp.(base.Predicter),
+		FeatureOverview: recSys,
 	}
 
 	return
