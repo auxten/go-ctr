@@ -156,6 +156,7 @@ To make this project work, quite a lot of code are copied and modified from the 
   - [go-fastapi](https://github.com/sashabaranov/go-fastapi)
 - Gopher logo with [GIMP](https://www.gimp.org/):
   - [ashleymcnamara/gophers](https://github.com/ashleymcnamara/gophers)
+- [JetBrains](https://www.jetbrains.com/?from=auxten/EdgeRec) for providing free license for this project.
 
 # Papers related
 
