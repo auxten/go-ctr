@@ -25,12 +25,12 @@ const cachedViews = computed(() => {
 
 <style lang="scss" scoped>
 .app-main {
-  min-height: calc(100vh - 126px);
+  min-height: calc(100vh - 86px);
   width: 100%;
   position: relative;
   overflow: hidden;
   background-color: #f0f2f5;
-  padding: 20px 24px;
+  padding: 16px 24px 20px;
 }
 </style>
 

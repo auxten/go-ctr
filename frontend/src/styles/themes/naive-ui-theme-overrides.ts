@@ -13,6 +13,10 @@ const themeOverrides: GlobalThemeOverrides = {
     itemColorActiveHoverInverted: '#263445',
     itemColorActiveCollapsedInverted: '#263445',
   },
+  Card: {
+    // boxShadow: '4px 4px 40px rgb(0 0 0 / 5%)',
+    borderRadius: '4px',
+  },
 }
 
 export {
