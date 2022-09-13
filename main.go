@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
-
+	"embed"
 	"github.com/auxten/edgeRec/example/movielens"
 	nn "github.com/auxten/edgeRec/nn/neural_network"
 	rcmd "github.com/auxten/edgeRec/recommend"
 	log "github.com/sirupsen/logrus"
 )
+
+//go:embed frontend/website/*
+var f embed.FS
 
 func main() {
 	var (
@@ -35,5 +38,5 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	rcmd.StartHttpApi(model, "/api/v1/recommend", ":8080")
+	rcmd.StartHttpApi(model, "/api/v1/recommend", ":8080", &f)
 }
