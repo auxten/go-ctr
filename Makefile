@@ -1,4 +1,7 @@
-.PHONY: lint
+.PHONY: lint build build-frontend
+
+default: build
+
 ## run lint to format golang code
 lint:
 	gofmt -w -s ./
