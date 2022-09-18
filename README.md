@@ -145,8 +145,9 @@ Search Embedding of:
 
 To make this project work, quite a lot of code are copied and modified from the following libraries:
 - Neural Network & Parameter Server: 
-  - [go-deep](https://github.com/patrikeh/go-deep)
   - [gorgonia](https://github.com/gorgonia/gorgonia)
+  - [goro](https://github.com/aunum/goro)
+  - [go-deep](https://github.com/patrikeh/go-deep)
   - [pa-m/sklearn](https://github.com/pa-m/sklearn)
 - Feature Engineering:
   - [go-featureprocessing](https://github.com/nikolaydubina/go-featureprocessing)
