@@ -145,15 +145,23 @@ func (d *DinNet) Fwd(xUserProfile, xUserBehaviors, xItemFeature, xCtxFeature *G.
 	return
 }
 
-func Train(xUserProfile, xUserBehaviors, xItemFeature, xCtxFeature *G.Node, numExamples, epochs int) {
-	rand.Seed(1337)
-	bs, uBehaviorSize, uBehaviorDim := xUserProfile.Shape()[0], xUserBehaviors.Shape()[1], xUserBehaviors.Shape()[2]
-	uProfileDim := xUserProfile.Shape()[1]
-	iFeatureDim := xItemFeature.Shape()[1]
-	cFeatureDim := xCtxFeature.Shape()[1]
+func Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim, numExamples, batchSize, epochs int,
 
-	var inputs, targets tensor.Tensor
-	var err error
+) {
+
+	var (
+		inputs, targets              tensor.Tensor
+		err                          error
+		xUserProfile, xCtxFeature    *G.Node
+		xUserBehaviors, xItemFeature *G.Node
+	)
+	rand.Seed(1337)
+
+	//bs := xUserProfile.Shape()[0]
+	// := xUserBehaviors.Shape()[1], xUserBehaviors.Shape()[2]
+	//uProfileDim := xUserProfile.Shape()[1]
+	//iFeatureDim := xItemFeature.Shape()[1]
+	//cFeatureDim := xCtxFeature.Shape()[1]
 
 	//numExamples := inputs.Shape()[0]
 	//
@@ -190,12 +198,12 @@ func Train(xUserProfile, xUserBehaviors, xItemFeature, xCtxFeature *G.Node, numE
 	//log.Printf("%v", prog)
 
 	vm := G.NewTapeMachine(g, G.WithPrecompiled(prog, locMap), G.BindDualValues(m.learnables()...))
-	solver := G.NewRMSPropSolver(G.WithBatchSize(float64(bs)))
+	solver := G.NewRMSPropSolver(G.WithBatchSize(float64(batchSize)))
 	defer vm.Close()
 	// pprof
 	// handlePprof(sigChan, doneChan)
 
-	batches := numExamples / bs
+	batches := numExamples / batchSize
 	log.Printf("Batches %d", batches)
 	bar := pb.New(batches)
 	bar.SetRefreshRate(time.Second)
@@ -206,8 +214,8 @@ func Train(xUserProfile, xUserBehaviors, xItemFeature, xCtxFeature *G.Node, numE
 		bar.Set(0)
 		bar.Start()
 		for b := 0; b < batches; b++ {
-			start := b * bs
-			end := start + bs
+			start := b * batchSize
+			end := start + batchSize
 			if start >= numExamples {
 				break
 			}
@@ -223,7 +231,7 @@ func Train(xUserProfile, xUserBehaviors, xItemFeature, xCtxFeature *G.Node, numE
 			if yVal, err = targets.Slice(G.S(start, end)); err != nil {
 				log.Fatal("Unable to slice y")
 			}
-			if err = xVal.(*tensor.Dense).Reshape(bs, 1, 28, 28); err != nil {
+			if err = xVal.(*tensor.Dense).Reshape(batchSize, 1, 28, 28); err != nil {
 				log.Fatalf("Unable to reshape %v", err)
 			}
 
