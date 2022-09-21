@@ -30,7 +30,7 @@ type DinNet struct {
 	out *G.Node
 }
 
-func (din *DinNet) learnables() G.Nodes {
+func (din *DinNet) learnable() G.Nodes {
 	ret := make(G.Nodes, 3, 3+2*din.uBehaviorSize)
 	ret[0] = din.mlp0
 	ret[1] = din.mlp1
@@ -87,17 +87,16 @@ func NewDinNet(g *G.ExprGraph,
 // xUserBehaviors: [batchSize, uBehaviorSize, uBehaviorDim]
 // xItemFeature: [batchSize, iFeatureDim]
 // xContextFeature: [batchSize, cFeatureDim]
-func (d *DinNet) Fwd(xUserProfile, xUserBehaviors, xItemFeature, xCtxFeature *G.Node) (err error) {
-	batchsize, uBehaviorSize, uBehaviorDim := xUserBehaviors.Shape()[0], xUserBehaviors.Shape()[1], xUserBehaviors.Shape()[2]
+func (d *DinNet) Fwd(xUserProfile, ubMatrix, xItemFeature, xCtxFeature *G.Node, batchSize, uBehaviorSize, uBehaviorDim int) (err error) {
 	iFeatureDim := xItemFeature.Shape()[1]
 	if uBehaviorDim != iFeatureDim {
-		return errors.Errorf("uBehaviorDim %d != xItemFeature.Shape()[1] %d", uBehaviorDim, iFeatureDim)
+		return errors.Errorf("uBehaviorDim %d != iFeatureDim %d", uBehaviorDim, iFeatureDim)
 	}
-	ubMatrix := G.Must(G.Reshape(xUserBehaviors, tensor.Shape{batchsize, uBehaviorSize * uBehaviorDim}))
+	xUserBehaviors := G.Must(G.Reshape(ubMatrix, tensor.Shape{batchSize, uBehaviorSize, uBehaviorDim}))
 
 	// outProduct should computed batch by batch!!!!
-	outProdVecs := make([]*G.Node, batchsize)
-	for i := 0; i < batchsize; i++ {
+	outProdVecs := make([]*G.Node, batchSize)
+	for i := 0; i < batchSize; i++ {
 		// ubVec.Shape() = [uBehaviorSize * uBehaviorDim]
 		ubVec := G.Must(G.Slice(ubMatrix, G.S(i)))
 		// item.Shape() = [iFeatureDim]
@@ -106,23 +105,25 @@ func (d *DinNet) Fwd(xUserProfile, xUserBehaviors, xItemFeature, xCtxFeature *G.
 		outProd := G.Must(G.OuterProd(ubVec, itemVec))
 		outProdVecs[i] = G.Must(G.Reshape(outProd, tensor.Shape{uBehaviorSize * uBehaviorDim * iFeatureDim}))
 	}
-	//outProducts.Shape() = [batchSize, uBehaviorSize * uBehaviorDim * iFeatureDim]
-	outProducts := G.Must(G.Concat(0, outProdVecs...))
+	//outProductsVec.Shape() = [batchSize * uBehaviorSize * uBehaviorDim * iFeatureDim]
+	outProductsVec := G.Must(G.Concat(0, outProdVecs...))
+	outProducts := G.Must(G.Reshape(outProductsVec, tensor.Shape{batchSize, uBehaviorSize * uBehaviorDim * iFeatureDim}))
 
-	actOuts := G.NewTensor(d.g, dt, 2, G.WithShape(batchsize, uBehaviorDim), G.WithName("actOuts"))
+	actOuts := G.NewTensor(d.g, dt, 2, G.WithShape(batchSize, uBehaviorDim), G.WithName("actOuts"), G.WithInit(G.Zeroes()))
 	for i := 0; i < uBehaviorSize; i++ {
 		// xUserBehaviors[:, i, :], ub.shape: [batchSize, uBehaviorDim]
 		ub := G.Must(G.Slice(xUserBehaviors, []tensor.Slice{nil, G.S(i)}...))
 		// Concat all xUserBehaviors[i], outProducts, xItemFeature
 		// actConcat.Shape() = [batchSize, uBehaviorDim+iFeatureDim+uBehaviorSize*uBehaviorDim*iFeatureDim]
 		actConcat := G.Must(G.Concat(1, ub, outProducts, xItemFeature))
-		actOut := G.Must(G.Mul(
+		actOut := G.Must(G.BroadcastHadamardProd(
 			ub,
 			G.Must(G.Rectify(
 				G.Must(G.Mul(
 					G.Must(G.Mul(actConcat, d.att0[i])),
 					d.att1[i],
-				)))),
+				)))), // [batchSize, 1]
+			nil, []byte{1},
 		)) // [batchSize, uBehaviorDim]
 
 		// Sum pooling
@@ -153,16 +154,17 @@ func Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim in
 	si *rcmd.SampleInfo,
 	inputs, targets tensor.Tensor,
 ) (err error) {
-	var (
-		xUserProfile, xCtxFeature    *G.Node
-		xUserBehaviors, xItemFeature *G.Node
-	)
-	rand.Seed(1337)
+	rand.Seed(2120)
 
 	g := G.NewGraph()
+	xUserProfile := G.NewMatrix(g, dt, G.WithShape(batchSize, uProfileDim), G.WithName("xUserProfile"))
+	//xUserBehaviors := G.NewTensor(g, dt, 3, G.WithShape(batchSize, uBehaviorSize, uBehaviorDim), G.WithName("xUserBehaviors"))
+	xUserBehaviorMatrix := G.NewMatrix(g, dt, G.WithShape(batchSize, uBehaviorSize*uBehaviorDim), G.WithName("xUserBehaviorMatrix"))
+	xItemFeature := G.NewMatrix(g, dt, G.WithShape(batchSize, iFeatureDim), G.WithName("xItemFeature"))
+	xCtxFeature := G.NewMatrix(g, dt, G.WithShape(batchSize, cFeatureDim), G.WithName("xCtxFeature"))
 	y := G.NewTensor(g, dt, 2, G.WithShape(batchSize, 1), G.WithName("y"))
 	m := NewDinNet(g, uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim)
-	if err = m.Fwd(xUserProfile, xUserBehaviors, xItemFeature, xCtxFeature); err != nil {
+	if err = m.Fwd(xUserProfile, xUserBehaviorMatrix, xItemFeature, xCtxFeature, batchSize, uBehaviorSize, uBehaviorDim); err != nil {
 		log.Fatalf("%+v", err)
 	}
 
@@ -170,11 +172,11 @@ func Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim in
 	cost := G.Must(G.Mean(losses))
 	cost = G.Must(G.Neg(cost))
 
-	// we wanna track costs
+	// we want to track costs
 	var costVal G.Value
 	G.Read(cost, &costVal)
 
-	if _, err = G.Grad(cost, m.learnables()...); err != nil {
+	if _, err = G.Grad(cost, m.learnable()...); err != nil {
 		log.Fatal(err)
 	}
 
@@ -182,12 +184,15 @@ func Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim in
 	// ioutil.WriteFile("fullGraph.dot", []byte(g.ToDot()), 0644)
 	// log.Printf("%v", prog)
 	// logger := log.New(os.Stderr, "", 0)
-	// vm := gorgonia.NewTapeMachine(g, gorgonia.BindDualValues(m.learnables()...), gorgonia.WithLogger(logger), gorgonia.WithWatchlist())
+	// vm := gorgonia.NewTapeMachine(g, gorgonia.BindDualValues(m.learnable()...), gorgonia.WithLogger(logger), gorgonia.WithWatchlist())
 
-	prog, locMap, _ := G.Compile(g)
+	prog, locMap, err := G.Compile(g)
+	if err != nil {
+		log.Fatal(err)
+	}
 	//log.Printf("%v", prog)
 
-	vm := G.NewTapeMachine(g, G.WithPrecompiled(prog, locMap), G.BindDualValues(m.learnables()...))
+	vm := G.NewTapeMachine(g, G.WithPrecompiled(prog, locMap), G.BindDualValues(m.learnable()...))
 	solver := G.NewRMSPropSolver(G.WithBatchSize(float64(batchSize)))
 	defer vm.Close()
 	// pprof
@@ -221,41 +226,51 @@ func Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim in
 				yVal              tensor.Tensor
 			)
 
-			if xUserProfileVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.UserProfileRange[0], si.UserBehaviorRange[1])}...); err != nil {
-				log.Fatal("Unable to slice xUserProfileVal")
+			if xUserProfileVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.UserProfileRange[0], si.UserProfileRange[1])}...); err != nil {
+				log.Fatalf("Unable to slice xUserProfileVal %v", err)
 			}
-			G.Let(xUserProfile, xUserProfileVal)
+			if err = G.Let(xUserProfile, xUserProfileVal); err != nil {
+				log.Fatalf("Unable to let xUserProfileVal %v", err)
+			}
 
 			if xUserBehaviorsVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.UserBehaviorRange[0], si.UserBehaviorRange[1])}...); err != nil {
-				log.Fatal("Unable to slice xUserBehaviorsVal")
+				log.Fatalf("Unable to slice xUserBehaviorsVal %v", err)
 			}
-			G.Let(xUserBehaviors, xUserBehaviorsVal)
+			if err = G.Let(xUserBehaviorMatrix, xUserBehaviorsVal); err != nil {
+				log.Fatalf("Unable to let xUserBehaviorsVal %v", err)
+			}
 
 			if xItemFeatureVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.ItemFeatureRange[0], si.ItemFeatureRange[1])}...); err != nil {
-				log.Fatal("Unable to slice xItemFeatureVal")
+				log.Fatalf("Unable to slice xItemFeatureVal %v", err)
 			}
-			G.Let(xItemFeature, xItemFeatureVal)
+			if err = G.Let(xItemFeature, xItemFeatureVal); err != nil {
+				log.Fatalf("Unable to let xItemFeatureVal %v", err)
+			}
 
 			if xCtxFeatureVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.CtxFeatureRange[0], si.CtxFeatureRange[1])}...); err != nil {
-				log.Fatal("Unable to slice xCtxFeatureVal")
+				log.Fatalf("Unable to slice xCtxFeatureVal %v", err)
 			}
-			G.Let(xCtxFeature, xCtxFeatureVal)
+			if err = G.Let(xCtxFeature, xCtxFeatureVal); err != nil {
+				log.Fatalf("Unable to let xCtxFeatureVal %v", err)
+			}
 
 			if yVal, err = targets.Slice(G.S(start, end)); err != nil {
-				log.Fatal("Unable to slice y")
+				log.Fatalf("Unable to slice y %v", err)
+			}
+			if err = G.Let(y, yVal); err != nil {
+				log.Fatalf("Unable to let y %v", err)
 			}
 
-			G.Let(y, yVal)
 			if err = vm.RunAll(); err != nil {
 				log.Fatalf("Failed at epoch  %d, batch %d. Error: %v", i, b, err)
 			}
-			if err = solver.Step(G.NodesToValueGrads(m.learnables())); err != nil {
+			if err = solver.Step(G.NodesToValueGrads(m.learnable())); err != nil {
 				log.Fatalf("Failed to update nodes with gradients at epoch %d, batch %d. Error %v", i, b, err)
 			}
 			vm.Reset()
 			bar.Increment()
 		}
 		log.Printf("Epoch %d | cost %v", i, costVal)
-
 	}
+	return
 }
