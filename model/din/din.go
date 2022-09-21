@@ -7,6 +7,7 @@ import (
 	_ "net/http/pprof"
 	"time"
 
+	rcmd "github.com/auxten/edgeRec/recommend"
 	"github.com/pkg/errors"
 	G "gorgonia.org/gorgonia"
 	"gorgonia.org/tensor"
@@ -92,13 +93,13 @@ func (d *DinNet) Fwd(xUserProfile, xUserBehaviors, xItemFeature, xCtxFeature *G.
 	if uBehaviorDim != iFeatureDim {
 		return errors.Errorf("uBehaviorDim %d != xItemFeature.Shape()[1] %d", uBehaviorDim, iFeatureDim)
 	}
-	ub2d := G.Must(G.Reshape(xUserBehaviors, tensor.Shape{batchsize, uBehaviorSize * uBehaviorDim}))
+	ubMatrix := G.Must(G.Reshape(xUserBehaviors, tensor.Shape{batchsize, uBehaviorSize * uBehaviorDim}))
 
 	// outProduct should computed batch by batch!!!!
 	outProdVecs := make([]*G.Node, batchsize)
 	for i := 0; i < batchsize; i++ {
 		// ubVec.Shape() = [uBehaviorSize * uBehaviorDim]
-		ubVec := G.Must(G.Slice(ub2d, G.S(i)))
+		ubVec := G.Must(G.Slice(ubMatrix, G.S(i)))
 		// item.Shape() = [iFeatureDim]
 		itemVec := G.Must(G.Slice(xItemFeature, G.S(i)))
 		// outProd.Shape() = [uBehaviorSize * uBehaviorDim, iFeatureDim]
@@ -147,32 +148,19 @@ func (d *DinNet) Fwd(xUserProfile, xUserBehaviors, xItemFeature, xCtxFeature *G.
 	return
 }
 
-func Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim, numExamples, batchSize, epochs int,
-
-) {
-
+func Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim int,
+	numExamples, batchSize, epochs int,
+	si *rcmd.SampleInfo,
+	inputs, targets tensor.Tensor,
+) (err error) {
 	var (
-		inputs, targets              tensor.Tensor
-		err                          error
 		xUserProfile, xCtxFeature    *G.Node
 		xUserBehaviors, xItemFeature *G.Node
 	)
 	rand.Seed(1337)
 
-	//bs := xUserProfile.Shape()[0]
-	// := xUserBehaviors.Shape()[1], xUserBehaviors.Shape()[2]
-	//uProfileDim := xUserProfile.Shape()[1]
-	//iFeatureDim := xItemFeature.Shape()[1]
-	//cFeatureDim := xCtxFeature.Shape()[1]
-
-	//numExamples := inputs.Shape()[0]
-	//
-	//if err := inputs.Reshape(numExamples, 1, 28, 28); err != nil {
-	//	log.Fatal(err)
-	//}
 	g := G.NewGraph()
-	//x := G.NewTensor(g, dt, 4, G.WithShape(bs, 1, 28, 28), G.WithName("x"))
-	//y := G.NewMatrix(g, dt, G.WithShape(bs, 10), G.WithName("y"))
+	y := G.NewTensor(g, dt, 2, G.WithShape(batchSize, 1), G.WithName("y"))
 	m := NewDinNet(g, uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim)
 	if err = m.Fwd(xUserProfile, xUserBehaviors, xItemFeature, xCtxFeature); err != nil {
 		log.Fatalf("%+v", err)
@@ -225,19 +213,38 @@ func Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim, n
 				end = numExamples
 			}
 
-			var xVal, yVal tensor.Tensor
-			if xVal, err = inputs.Slice(G.S(start, end)); err != nil {
-				log.Fatal("Unable to slice x")
+			var (
+				xUserProfileVal   tensor.Tensor
+				xUserBehaviorsVal tensor.Tensor
+				xItemFeatureVal   tensor.Tensor
+				xCtxFeatureVal    tensor.Tensor
+				yVal              tensor.Tensor
+			)
+
+			if xUserProfileVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.UserProfileRange[0], si.UserBehaviorRange[1])}...); err != nil {
+				log.Fatal("Unable to slice xUserProfileVal")
 			}
+			G.Let(xUserProfile, xUserProfileVal)
+
+			if xUserBehaviorsVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.UserBehaviorRange[0], si.UserBehaviorRange[1])}...); err != nil {
+				log.Fatal("Unable to slice xUserBehaviorsVal")
+			}
+			G.Let(xUserBehaviors, xUserBehaviorsVal)
+
+			if xItemFeatureVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.ItemFeatureRange[0], si.ItemFeatureRange[1])}...); err != nil {
+				log.Fatal("Unable to slice xItemFeatureVal")
+			}
+			G.Let(xItemFeature, xItemFeatureVal)
+
+			if xCtxFeatureVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.CtxFeatureRange[0], si.CtxFeatureRange[1])}...); err != nil {
+				log.Fatal("Unable to slice xCtxFeatureVal")
+			}
+			G.Let(xCtxFeature, xCtxFeatureVal)
 
 			if yVal, err = targets.Slice(G.S(start, end)); err != nil {
 				log.Fatal("Unable to slice y")
 			}
-			if err = xVal.(*tensor.Dense).Reshape(batchSize, 1, 28, 28); err != nil {
-				log.Fatalf("Unable to reshape %v", err)
-			}
 
-			G.Let(x, xVal)
 			G.Let(y, yVal)
 			if err = vm.RunAll(); err != nil {
 				log.Fatalf("Failed at epoch  %d, batch %d. Error: %v", i, b, err)
