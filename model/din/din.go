@@ -40,36 +40,36 @@ func (din *DinNet) learnables() G.Nodes {
 }
 
 func NewDinNet(g *G.ExprGraph,
-	userProfileDim, userBehaviorSize, userBehaviorDim int,
-	itemFeatureDim int,
-	contextFeatureDim int,
+	uProfileDim, uBehaviorSize, uBehaviorDim int,
+	iFeatureDim int,
+	ctxFeatureDim int,
 ) *DinNet {
-	if userBehaviorDim != itemFeatureDim {
-		log.Fatalf("userBehaviorDim %d != itemFeatureDim %d", userBehaviorDim, itemFeatureDim)
+	if uBehaviorDim != iFeatureDim {
+		log.Fatalf("uBehaviorDim %d != iFeatureDim %d", uBehaviorDim, iFeatureDim)
 	}
 	// attention layer
-	att0 := make([]*G.Node, userBehaviorSize)
-	att1 := make([]*G.Node, userBehaviorSize)
-	for i := 0; i < userBehaviorSize; i++ {
-		att0[i] = G.NewTensor(g, dt, 2, G.WithShape(userBehaviorDim*3, 36), G.WithName("att0"), G.WithInit(G.GlorotN(1.0)))
+	att0 := make([]*G.Node, uBehaviorSize)
+	att1 := make([]*G.Node, uBehaviorSize)
+	for i := 0; i < uBehaviorSize; i++ {
+		att0[i] = G.NewTensor(g, dt, 2, G.WithShape(uBehaviorDim+iFeatureDim+uBehaviorSize*uBehaviorDim*iFeatureDim, 36), G.WithName("att0"), G.WithInit(G.GlorotN(1.0)))
 		att1[i] = G.NewTensor(g, dt, 2, G.WithShape(36, 1), G.WithName("att1"), G.WithInit(G.GlorotN(1.0)))
 	}
 
 	// user behaviors are represented as a sequence of item embeddings. Before
 	// being fed into the MLP, we need to flatten the sequence into a single with
 	// sum pooling with Attention as the weights which is the key point of DIN model.
-	mlp0 := G.NewMatrix(g, G.Float64, G.WithShape(userProfileDim+userBehaviorDim+itemFeatureDim+contextFeatureDim, 200), G.WithName("mlp0"), G.WithInit(G.GlorotN(1.0)))
+	mlp0 := G.NewMatrix(g, G.Float64, G.WithShape(uProfileDim+uBehaviorDim+iFeatureDim+ctxFeatureDim, 200), G.WithName("mlp0"), G.WithInit(G.GlorotN(1.0)))
 
 	mlp1 := G.NewMatrix(g, G.Float64, G.WithShape(200, 80), G.WithName("mlp1"), G.WithInit(G.GlorotN(1.0)))
 
 	mlp2 := G.NewMatrix(g, G.Float64, G.WithShape(80, 1), G.WithName("mlp2"), G.WithInit(G.GlorotN(1.0)))
 
 	return &DinNet{
-		uProfileDim:   userProfileDim,
-		uBehaviorSize: userBehaviorSize,
-		uBehaviorDim:  userBehaviorDim,
-		iFeatureDim:   itemFeatureDim,
-		cFeatureDim:   contextFeatureDim,
+		uProfileDim:   uProfileDim,
+		uBehaviorSize: uBehaviorSize,
+		uBehaviorDim:  uBehaviorDim,
+		iFeatureDim:   iFeatureDim,
+		cFeatureDim:   ctxFeatureDim,
 
 		g:    g,
 		att0: att0,
@@ -113,6 +113,7 @@ func (d *DinNet) Fwd(xUserProfile, xUserBehaviors, xItemFeature, xCtxFeature *G.
 		// xUserBehaviors[:, i, :], ub.shape: [batchSize, uBehaviorDim]
 		ub := G.Must(G.Slice(xUserBehaviors, []tensor.Slice{nil, G.S(i)}...))
 		// Concat all xUserBehaviors[i], outProducts, xItemFeature
+		// actConcat.Shape() = [batchSize, uBehaviorDim+iFeatureDim+uBehaviorSize*uBehaviorDim*iFeatureDim]
 		actConcat := G.Must(G.Concat(1, ub, outProducts, xItemFeature))
 		actOut := G.Must(G.Mul(
 			ub,
