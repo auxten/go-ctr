@@ -69,7 +69,6 @@ type ItemFeaturer interface {
 type SampleInfo struct {
 	UserProfileRange  [2]int // [start, end)
 	UserBehaviorRange [2]int // [start, end)
-	UserBehaviorDim   int    // single user behavior dim, should be identical to item embedding dim
 	ItemFeatureRange  [2]int // [start, end)
 	CtxFeatureRange   [2]int // [start, end)
 }

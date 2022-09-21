@@ -3,48 +3,40 @@ package din
 import (
 	"testing"
 
-	log "github.com/sirupsen/logrus"
+	rcmd "github.com/auxten/edgeRec/recommend"
 	. "github.com/smartystreets/goconvey/convey"
-	G "gorgonia.org/gorgonia"
+	"gorgonia.org/tensor"
 )
 
 func TestDin(t *testing.T) {
 	Convey("Din simple Grad", t, func() {
 		var (
-			err           error
-			batchSize     = 2
-			uBehaviorSize = 3
-			uBehaviorDim  = 2
+			batchSize     = 10
 			uProfileDim   = 2
-			iFeatureDim   = 2
-			cFeatureDim   = 2
-			numExamples   = 2
-			epochs        = 2
+			uBehaviorSize = 3
+			uBehaviorDim  = 7
+			iFeatureDim   = 7
+			cFeatureDim   = 9
+
+			numExamples = 20
+			epochs      = 100
+			sampleInfo  = &rcmd.SampleInfo{
+				UserProfileRange:  [2]int{0, uProfileDim},
+				UserBehaviorRange: [2]int{uProfileDim, uProfileDim + uBehaviorSize*uBehaviorDim},
+				ItemFeatureRange:  [2]int{uProfileDim + uBehaviorSize*uBehaviorDim, uProfileDim + uBehaviorSize*uBehaviorDim + iFeatureDim},
+				CtxFeatureRange:   [2]int{uProfileDim + uBehaviorSize*uBehaviorDim + iFeatureDim, uProfileDim + uBehaviorSize*uBehaviorDim + iFeatureDim + cFeatureDim},
+			}
+			inputWidth = uProfileDim + uBehaviorSize*uBehaviorDim + iFeatureDim + cFeatureDim
+			inputs     = tensor.New(tensor.WithShape(numExamples, inputWidth), tensor.WithBacking(tensor.Range(tensor.Float64, 0, inputWidth*numExamples)))
+			labels     = tensor.New(tensor.WithShape(numExamples, 1), tensor.WithBacking(tensor.Range(tensor.Float64, 0, numExamples)))
 		)
 
-		g := G.NewGraph()
-		xUserProfile := G.NewMatrix(g, G.Float64, G.WithShape(batchSize, uProfileDim), G.WithInit(G.RangedFrom(1)), G.WithName("xUserProfile"))
-		xUserBehavior := G.NewTensor(g, G.Float64, 3, G.WithShape(batchSize, uBehaviorSize, uBehaviorDim), G.WithInit(G.RangedFrom(10)), G.WithName("xUserBehavior"))
-		xItemFeature := G.NewMatrix(g, G.Float64, G.WithShape(batchSize, iFeatureDim), G.WithInit(G.RangedFrom(100)), G.WithName("xItemFeature"))
-		xContextFeature := G.NewMatrix(g, G.Float64, G.WithShape(batchSize, cFeatureDim), G.WithInit(G.RangedFrom(1000)), G.WithName("xContextFeature"))
-
-		din := NewDinNet(g, uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim)
-		if err = din.Fwd(xUserProfile, xUserBehavior, xItemFeature, xContextFeature); err != nil {
-			log.Fatalf("%+v", err)
-		}
-
-		y := G.NewMatrix(g, G.Float64, G.WithShape(batchSize, 1), G.WithInit(G.RangedFrom(1)), G.WithName("y"))
-		losses := G.Must(G.HadamardProd(G.Must(G.Neg(G.Must(G.Log(din.out)))), y))
-		cost := G.Must(G.Mean(losses))
-		cost = G.Must(G.Neg(cost))
-
-		// we wanna track costs
-		var costVal G.Value
-		G.Read(cost, &costVal)
-
-		if _, err = G.Grad(cost, din.learnables()...); err != nil {
-			log.Fatal(err)
-		}
+		err := Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim,
+			numExamples, batchSize, epochs,
+			sampleInfo,
+			inputs, labels,
+		)
+		So(err, ShouldBeNil)
 
 	})
 }
