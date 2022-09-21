@@ -66,6 +66,14 @@ type ItemFeaturer interface {
 	GetItemFeature(context.Context, int) (Tensor, error)
 }
 
+type SampleInfo struct {
+	UserProfileRange  [2]int // [start, end)
+	UserBehaviorRange [2]int // [start, end)
+	UserBehaviorDim   int    // single user behavior dim, should be identical to item embedding dim
+	ItemFeatureRange  [2]int // [start, end)
+	CtxFeatureRange   [2]int // [start, end)
+}
+
 type UserItemOverview struct {
 	UserId       int `json:"user_id"`
 	UserFeatures map[string]interface{}
