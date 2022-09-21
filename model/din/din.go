@@ -87,32 +87,33 @@ func NewDinNet(g *G.ExprGraph,
 // xItemFeature: [batchSize, iFeatureDim]
 // xContextFeature: [batchSize, cFeatureDim]
 func (d *DinNet) Fwd(xUserProfile, xUserBehaviors, xItemFeature, xCtxFeature *G.Node) (err error) {
-	batchsize, uBehaviorSize, uBehaviorDim := xUserProfile.Shape()[0], xUserBehaviors.Shape()[1], xUserBehaviors.Shape()[2]
-	if uBehaviorDim != xItemFeature.Shape()[1] {
-		return errors.Errorf("uBehaviorDim %d != xItemFeature.Shape()[1] %d", uBehaviorDim, xItemFeature.Shape()[1])
+	batchsize, uBehaviorSize, uBehaviorDim := xUserBehaviors.Shape()[0], xUserBehaviors.Shape()[1], xUserBehaviors.Shape()[2]
+	iFeatureDim := xItemFeature.Shape()[1]
+	if uBehaviorDim != iFeatureDim {
+		return errors.Errorf("uBehaviorDim %d != xItemFeature.Shape()[1] %d", uBehaviorDim, iFeatureDim)
 	}
-	//ub2d := G.Must(G.Reshape(xUserBehaviors, tensor.Shape{batchsize, uBehaviorSize * uBehaviorDim}))
-	repeatItemFeature := make([]*G.Node, uBehaviorSize)
-	for i := 0; i < uBehaviorSize; i++ {
-		repeatItemFeature[i] = xItemFeature
-	}
-	xItemFeature2d := G.Must(G.Concat(1, repeatItemFeature...))
-	// just make sure the shape is correct
-	xItemFeatureRepeated := G.Must(G.Reshape(xItemFeature2d, tensor.Shape{batchsize, uBehaviorSize, uBehaviorDim}))
+	ub2d := G.Must(G.Reshape(xUserBehaviors, tensor.Shape{batchsize, uBehaviorSize * uBehaviorDim}))
 
-	// Mul all xUserBehaviors with xItemFeature
-	// outProducts shape: [batchSize, uBehaviorSize, uBehaviorDim]
-	outProducts := G.Must(G.Mul(xUserBehaviors, xItemFeatureRepeated))
+	// outProduct should computed batch by batch!!!!
+	outProdVecs := make([]*G.Node, batchsize)
+	for i := 0; i < batchsize; i++ {
+		// ubVec.Shape() = [uBehaviorSize * uBehaviorDim]
+		ubVec := G.Must(G.Slice(ub2d, G.S(i)))
+		// item.Shape() = [iFeatureDim]
+		itemVec := G.Must(G.Slice(xItemFeature, G.S(i)))
+		// outProd.Shape() = [uBehaviorSize * uBehaviorDim, iFeatureDim]
+		outProd := G.Must(G.OuterProd(ubVec, itemVec))
+		outProdVecs[i] = G.Must(G.Reshape(outProd, tensor.Shape{uBehaviorSize * uBehaviorDim * iFeatureDim}))
+	}
+	//outProducts.Shape() = [batchSize, uBehaviorSize * uBehaviorDim * iFeatureDim]
+	outProducts := G.Must(G.Concat(0, outProdVecs...))
 
 	actOuts := G.NewTensor(d.g, dt, 2, G.WithShape(batchsize, uBehaviorDim), G.WithName("actOuts"))
 	for i := 0; i < uBehaviorSize; i++ {
 		// xUserBehaviors[:, i, :], ub.shape: [batchSize, uBehaviorDim]
 		ub := G.Must(G.Slice(xUserBehaviors, []tensor.Slice{nil, G.S(i)}...))
-		// outProducts[:, i, :], outProducts.shape: [batchSize, uBehaviorDim]
-		outProduct := G.Must(G.Slice(outProducts, []tensor.Slice{nil, G.S(i)}...))
-
-		// Concat all xUserBehaviors[i], outProducts[i], xItemFeature
-		actConcat := G.Must(G.Concat(1, ub, outProduct, xItemFeature))
+		// Concat all xUserBehaviors[i], outProducts, xItemFeature
+		actConcat := G.Must(G.Concat(1, ub, outProducts, xItemFeature))
 		actOut := G.Must(G.Mul(
 			ub,
 			G.Must(G.Rectify(
