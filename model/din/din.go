@@ -168,9 +168,10 @@ func Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim in
 		log.Fatalf("%+v", err)
 	}
 
-	losses := G.Must(G.HadamardProd(G.Must(G.Neg(G.Must(G.Log(m.out)))), y))
+	//losses := G.Must(G.HadamardProd(G.Must(G.Neg(G.Must(G.Log(m.out)))), y))
+	losses := G.Must(G.Square(G.Must(G.Sub(m.out, y))))
 	cost := G.Must(G.Mean(losses))
-	cost = G.Must(G.Neg(cost))
+	//cost = G.Must(G.Neg(cost))
 
 	// we want to track costs
 	var costVal G.Value

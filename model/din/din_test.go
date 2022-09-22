@@ -27,9 +27,17 @@ func TestDin(t *testing.T) {
 				CtxFeatureRange:   [2]int{uProfileDim + uBehaviorSize*uBehaviorDim + iFeatureDim, uProfileDim + uBehaviorSize*uBehaviorDim + iFeatureDim + cFeatureDim},
 			}
 			inputWidth = uProfileDim + uBehaviorSize*uBehaviorDim + iFeatureDim + cFeatureDim
-			inputs     = tensor.New(tensor.WithShape(numExamples, inputWidth), tensor.WithBacking(tensor.Range(tensor.Float64, 0, inputWidth*numExamples)))
-			labels     = tensor.New(tensor.WithShape(numExamples, 1), tensor.WithBacking(tensor.Range(tensor.Float64, 0, numExamples)))
 		)
+		inputSlice := make([]float64, numExamples*inputWidth)
+		for i := range inputSlice {
+			inputSlice[i] = float64(i)/float64(numExamples*inputWidth) - 0.5
+		}
+		inputs := tensor.New(tensor.WithShape(numExamples, inputWidth), tensor.WithBacking(inputSlice))
+		labelSlice := make([]float64, numExamples)
+		for i := 0; i < numExamples; i++ {
+			labelSlice[i] = float64(i % 2)
+		}
+		labels := tensor.New(tensor.WithShape(numExamples, 1), tensor.WithBacking(labelSlice))
 
 		err := Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim,
 			numExamples, batchSize, epochs,
