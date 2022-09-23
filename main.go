@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"embed"
+	"flag"
 	"github.com/auxten/edgeRec/example/movielens"
 	nn "github.com/auxten/edgeRec/nn/neural_network"
 	rcmd "github.com/auxten/edgeRec/recommend"
@@ -12,7 +13,19 @@ import (
 //go:embed frontend/website/*
 var f embed.FS
 
+var verFlag = flag.Bool("v", false, "show binary version")
+
+var Version = "unknown-version"
+var Commit = "unknown-commit"
+
 func main() {
+	flag.Parse()
+	if *verFlag {
+		log.Println("Version: ", Version)
+		log.Println("Commit: ", Commit)
+		return
+	}
+	
 	var (
 		recSys = &movielens.RecSysImpl{
 			DataPath:  "movielens.db",
