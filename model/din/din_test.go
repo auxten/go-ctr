@@ -1,6 +1,7 @@
 package din
 
 import (
+	"math/rand"
 	"testing"
 
 	rcmd "github.com/auxten/edgeRec/recommend"
@@ -11,15 +12,15 @@ import (
 func TestDin(t *testing.T) {
 	Convey("Din simple Grad", t, func() {
 		var (
-			batchSize     = 10
+			batchSize     = 100
 			uProfileDim   = 2
 			uBehaviorSize = 3
 			uBehaviorDim  = 7
 			iFeatureDim   = 7
 			cFeatureDim   = 9
 
-			numExamples = 20
-			epochs      = 100
+			numExamples = 200000
+			epochs      = 10
 			sampleInfo  = &rcmd.SampleInfo{
 				UserProfileRange:  [2]int{0, uProfileDim},
 				UserBehaviorRange: [2]int{uProfileDim, uProfileDim + uBehaviorSize*uBehaviorDim},
@@ -30,12 +31,13 @@ func TestDin(t *testing.T) {
 		)
 		inputSlice := make([]float64, numExamples*inputWidth)
 		for i := range inputSlice {
-			inputSlice[i] = float64(i)/float64(numExamples*inputWidth) - 0.5
+			// random float between 0 and 1
+			inputSlice[i] = rand.Float64()
 		}
 		inputs := tensor.New(tensor.WithShape(numExamples, inputWidth), tensor.WithBacking(inputSlice))
 		labelSlice := make([]float64, numExamples)
 		for i := 0; i < numExamples; i++ {
-			labelSlice[i] = float64(i % 2)
+			labelSlice[i] = rand.Float64()
 		}
 		labels := tensor.New(tensor.WithShape(numExamples, 1), tensor.WithBacking(labelSlice))
 

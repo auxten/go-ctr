@@ -2,6 +2,7 @@ package din
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	_ "net/http/pprof"
@@ -52,8 +53,8 @@ func NewDinNet(g *G.ExprGraph,
 	att0 := make([]*G.Node, uBehaviorSize)
 	att1 := make([]*G.Node, uBehaviorSize)
 	for i := 0; i < uBehaviorSize; i++ {
-		att0[i] = G.NewTensor(g, dt, 2, G.WithShape(uBehaviorDim+iFeatureDim+uBehaviorSize*uBehaviorDim*iFeatureDim, 36), G.WithName("att0"), G.WithInit(G.GlorotN(1.0)))
-		att1[i] = G.NewTensor(g, dt, 2, G.WithShape(36, 1), G.WithName("att1"), G.WithInit(G.GlorotN(1.0)))
+		att0[i] = G.NewTensor(g, dt, 2, G.WithShape(uBehaviorDim+iFeatureDim+uBehaviorSize*uBehaviorDim*iFeatureDim, 36), G.WithName(fmt.Sprintf("att0-%d", i)), G.WithInit(G.GlorotN(1.0)))
+		att1[i] = G.NewTensor(g, dt, 2, G.WithShape(36, 1), G.WithName(fmt.Sprintf("att1-%d", i)), G.WithInit(G.GlorotN(1.0)))
 	}
 
 	// user behaviors are represented as a sequence of item embeddings. Before
@@ -182,7 +183,7 @@ func Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim in
 	}
 
 	// debug
-	// ioutil.WriteFile("fullGraph.dot", []byte(g.ToDot()), 0644)
+	ioutil.WriteFile("fullGraph.dot", []byte(g.ToDot()), 0644)
 	// log.Printf("%v", prog)
 	// logger := log.New(os.Stderr, "", 0)
 	// vm := gorgonia.NewTapeMachine(g, gorgonia.BindDualValues(m.learnable()...), gorgonia.WithLogger(logger), gorgonia.WithWatchlist())
@@ -193,8 +194,14 @@ func Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim in
 	}
 	//log.Printf("%v", prog)
 
-	vm := G.NewTapeMachine(g, G.WithPrecompiled(prog, locMap), G.BindDualValues(m.learnable()...))
-	solver := G.NewRMSPropSolver(G.WithBatchSize(float64(batchSize)))
+	vm := G.NewTapeMachine(g,
+		G.WithPrecompiled(prog, locMap),
+		G.BindDualValues(m.learnable()...),
+		//G.WithLogger(log.New(os.Stderr, "", 0)),
+		//G.WithWatchlist(m.mlp0, m.mlp1, m.mlp2),
+	)
+	//solver := G.NewRMSPropSolver(G.WithBatchSize(float64(batchSize)))
+	solver := G.NewAdamSolver(G.WithLearnRate(0.001))
 	defer vm.Close()
 	// pprof
 	// handlePprof(sigChan, doneChan)
