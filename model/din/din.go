@@ -2,13 +2,14 @@ package din
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
+	"math"
 	"math/rand"
 	_ "net/http/pprof"
 	"time"
 
 	rcmd "github.com/auxten/edgeRec/recommend"
+	"github.com/auxten/edgeRec/utils"
 	"github.com/pkg/errors"
 	G "gorgonia.org/gorgonia"
 	"gorgonia.org/tensor"
@@ -18,6 +19,60 @@ import (
 
 var dt = tensor.Float64
 
+type model interface {
+	learnable() G.Nodes
+	Fwd(xUserProfile, ubMatrix, xItemFeature, xCtxFeature *G.Node, batchSize, uBehaviorSize, uBehaviorDim int) (err error)
+	Out() *G.Node
+}
+
+type SimpleMLP struct {
+	mlp0, mlp1, mlp2 *G.Node
+	d0, d1           float64 // dropout probabilities
+	out              *G.Node
+}
+
+func NewSimpleMLP(g *G.ExprGraph,
+	uProfileDim, uBehaviorSize, uBehaviorDim int,
+	iFeatureDim int,
+	ctxFeatureDim int,
+) (mlp *SimpleMLP) {
+	mlp0 := G.NewMatrix(g, G.Float64, G.WithShape(uProfileDim+uBehaviorSize*uBehaviorDim+iFeatureDim+ctxFeatureDim, 200), G.WithName("mlp0"), G.WithInit(G.Gaussian(0, 1)))
+	mlp1 := G.NewMatrix(g, G.Float64, G.WithShape(200, 80), G.WithName("mlp1"), G.WithInit(G.Gaussian(0, 1)))
+	mlp2 := G.NewMatrix(g, G.Float64, G.WithShape(80, 1), G.WithName("mlp2"), G.WithInit(G.Gaussian(0, 1)))
+	return &SimpleMLP{
+		d0:   0.01,
+		d1:   0.01,
+		mlp0: mlp0,
+		mlp1: mlp1,
+		mlp2: mlp2,
+	}
+}
+
+func (mlp *SimpleMLP) Out() *G.Node {
+	return mlp.out
+}
+
+func (mlp *SimpleMLP) learnable() G.Nodes {
+	return G.Nodes{mlp.mlp0, mlp.mlp1, mlp.mlp2}
+}
+
+func (mlp *SimpleMLP) Fwd(xUserProfile, ubMatrix, xItemFeature, xCtxFeature *G.Node, batchSize, uBehaviorSize, uBehaviorDim int) (err error) {
+	// user behaviors
+	ubMatrix = G.Must(G.Reshape(ubMatrix, tensor.Shape{batchSize, uBehaviorSize * uBehaviorDim}))
+	// item feature
+	// context feature
+	// concat
+	x := G.Must(G.Concat(1, xUserProfile, ubMatrix, xItemFeature, xCtxFeature))
+	// mlp
+	mlp0Out := G.Must(G.LeakyRelu(G.Must(G.Mul(x, mlp.mlp0)), 0.1))
+	mlp0Out = G.Must(G.Dropout(mlp0Out, mlp.d0))
+	mlp1Out := G.Must(G.LeakyRelu(G.Must(G.Mul(mlp0Out, mlp.mlp1)), 0.1))
+	mlp1Out = G.Must(G.Dropout(mlp1Out, mlp.d1))
+	mlp.out = G.Must(G.Sigmoid(G.Must(G.Mul(mlp1Out, mlp.mlp2))))
+
+	return
+}
+
 type DinNet struct {
 	uProfileDim, uBehaviorSize, uBehaviorDim int
 	iFeatureDim                              int
@@ -25,10 +80,14 @@ type DinNet struct {
 
 	g                *G.ExprGraph
 	mlp0, mlp1, mlp2 *G.Node   // weights of MLP layers
+	d0, d1           float64   // dropout probabilities
 	att0, att1       []*G.Node // weights of Attention layers
-	//d0, d1           float64 // dropout probabilities
 
 	out *G.Node
+}
+
+func (din *DinNet) Out() *G.Node {
+	return din.out
 }
 
 func (din *DinNet) learnable() G.Nodes {
@@ -53,18 +112,18 @@ func NewDinNet(g *G.ExprGraph,
 	att0 := make([]*G.Node, uBehaviorSize)
 	att1 := make([]*G.Node, uBehaviorSize)
 	for i := 0; i < uBehaviorSize; i++ {
-		att0[i] = G.NewTensor(g, dt, 2, G.WithShape(uBehaviorDim+iFeatureDim+uBehaviorSize*uBehaviorDim*iFeatureDim, 36), G.WithName(fmt.Sprintf("att0-%d", i)), G.WithInit(G.GlorotN(1.0)))
-		att1[i] = G.NewTensor(g, dt, 2, G.WithShape(36, 1), G.WithName(fmt.Sprintf("att1-%d", i)), G.WithInit(G.GlorotN(1.0)))
+		att0[i] = G.NewTensor(g, dt, 2, G.WithShape(uBehaviorDim+iFeatureDim+uBehaviorSize*uBehaviorDim*iFeatureDim, 36), G.WithName(fmt.Sprintf("att0-%d", i)), G.WithInit(G.Gaussian(0, 1)))
+		att1[i] = G.NewTensor(g, dt, 2, G.WithShape(36, 1), G.WithName(fmt.Sprintf("att1-%d", i)), G.WithInit(G.Gaussian(0, 1)))
 	}
 
 	// user behaviors are represented as a sequence of item embeddings. Before
 	// being fed into the MLP, we need to flatten the sequence into a single with
 	// sum pooling with Attention as the weights which is the key point of DIN model.
-	mlp0 := G.NewMatrix(g, G.Float64, G.WithShape(uProfileDim+uBehaviorDim+iFeatureDim+ctxFeatureDim, 200), G.WithName("mlp0"), G.WithInit(G.GlorotN(1.0)))
+	mlp0 := G.NewMatrix(g, G.Float64, G.WithShape(uProfileDim+uBehaviorDim+iFeatureDim+ctxFeatureDim, 200), G.WithName("mlp0"), G.WithInit(G.Gaussian(0, 1)))
 
-	mlp1 := G.NewMatrix(g, G.Float64, G.WithShape(200, 80), G.WithName("mlp1"), G.WithInit(G.GlorotN(1.0)))
+	mlp1 := G.NewMatrix(g, G.Float64, G.WithShape(200, 80), G.WithName("mlp1"), G.WithInit(G.Gaussian(0, 1)))
 
-	mlp2 := G.NewMatrix(g, G.Float64, G.WithShape(80, 1), G.WithName("mlp2"), G.WithInit(G.GlorotN(1.0)))
+	mlp2 := G.NewMatrix(g, G.Float64, G.WithShape(80, 1), G.WithName("mlp2"), G.WithInit(G.Gaussian(0, 1)))
 
 	return &DinNet{
 		uProfileDim:   uProfileDim,
@@ -77,6 +136,9 @@ func NewDinNet(g *G.ExprGraph,
 		att0: att0,
 		att1: att1,
 
+		d0: 0.001,
+		d1: 0.001,
+
 		mlp0: mlp0,
 		mlp1: mlp1,
 		mlp2: mlp2,
@@ -88,7 +150,7 @@ func NewDinNet(g *G.ExprGraph,
 // xUserBehaviors: [batchSize, uBehaviorSize, uBehaviorDim]
 // xItemFeature: [batchSize, iFeatureDim]
 // xContextFeature: [batchSize, cFeatureDim]
-func (d *DinNet) Fwd(xUserProfile, ubMatrix, xItemFeature, xCtxFeature *G.Node, batchSize, uBehaviorSize, uBehaviorDim int) (err error) {
+func (din *DinNet) Fwd(xUserProfile, ubMatrix, xItemFeature, xCtxFeature *G.Node, batchSize, uBehaviorSize, uBehaviorDim int) (err error) {
 	iFeatureDim := xItemFeature.Shape()[1]
 	if uBehaviorDim != iFeatureDim {
 		return errors.Errorf("uBehaviorDim %d != iFeatureDim %d", uBehaviorDim, iFeatureDim)
@@ -110,7 +172,7 @@ func (d *DinNet) Fwd(xUserProfile, ubMatrix, xItemFeature, xCtxFeature *G.Node, 
 	outProductsVec := G.Must(G.Concat(0, outProdVecs...))
 	outProducts := G.Must(G.Reshape(outProductsVec, tensor.Shape{batchSize, uBehaviorSize * uBehaviorDim * iFeatureDim}))
 
-	actOuts := G.NewTensor(d.g, dt, 2, G.WithShape(batchSize, uBehaviorDim), G.WithName("actOuts"), G.WithInit(G.Zeroes()))
+	actOuts := G.NewTensor(din.g, dt, 2, G.WithShape(batchSize, uBehaviorDim), G.WithName("actOuts"), G.WithInit(G.Zeroes()))
 	for i := 0; i < uBehaviorSize; i++ {
 		// xUserBehaviors[:, i, :], ub.shape: [batchSize, uBehaviorDim]
 		ub := G.Must(G.Slice(xUserBehaviors, []tensor.Slice{nil, G.S(i)}...))
@@ -121,8 +183,8 @@ func (d *DinNet) Fwd(xUserProfile, ubMatrix, xItemFeature, xCtxFeature *G.Node, 
 			ub,
 			G.Must(G.Rectify(
 				G.Must(G.Mul(
-					G.Must(G.Mul(actConcat, d.att0[i])),
-					d.att1[i],
+					G.Must(G.Mul(actConcat, din.att0[i])),
+					din.att1[i],
 				)))), // [batchSize, 1]
 			nil, []byte{1},
 		)) // [batchSize, uBehaviorDim]
@@ -138,15 +200,17 @@ func (d *DinNet) Fwd(xUserProfile, ubMatrix, xItemFeature, xCtxFeature *G.Node, 
 
 	// mlp0.Shape: [userProfileDim+userBehaviorDim+itemFeatureDim+contextFeatureDim, 200]
 	// out.Shape: [batchSize, 200]
-	mlp0Out := G.Must(G.LeakyRelu(G.Must(G.Mul(concat, d.mlp0)), 0.1))
+	mlp0Out := G.Must(G.LeakyRelu(G.Must(G.Mul(concat, din.mlp0)), 0.1))
+	mlp0Out = G.Must(G.Dropout(mlp0Out, din.d0))
 	// mlp1.Shape: [200, 80]
 	// out.Shape: [batchSize, 80]
-	mlp1Out := G.Must(G.LeakyRelu(G.Must(G.Mul(mlp0Out, d.mlp1)), 0.1))
+	mlp1Out := G.Must(G.LeakyRelu(G.Must(G.Mul(mlp0Out, din.mlp1)), 0.1))
+	mlp1Out = G.Must(G.Dropout(mlp1Out, din.d1))
 	// mlp2.Shape: [80, 1]
 	// out.Shape: [batchSize, 1]
-	mlp2Out := G.Must(G.SoftMax(G.Must(G.Mul(mlp1Out, d.mlp2))))
+	mlp2Out := G.Must(G.Sigmoid(G.Must(G.Mul(mlp1Out, din.mlp2))))
 
-	d.out = mlp2Out
+	din.out = mlp2Out
 	return
 }
 
@@ -154,23 +218,25 @@ func Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim in
 	numExamples, batchSize, epochs int,
 	si *rcmd.SampleInfo,
 	inputs, targets tensor.Tensor,
+	//testInputs, testTargets tensor.Tensor,
+	g *G.ExprGraph,
+	m model,
 ) (err error) {
 	rand.Seed(2120)
 
-	g := G.NewGraph()
 	xUserProfile := G.NewMatrix(g, dt, G.WithShape(batchSize, uProfileDim), G.WithName("xUserProfile"))
 	//xUserBehaviors := G.NewTensor(g, dt, 3, G.WithShape(batchSize, uBehaviorSize, uBehaviorDim), G.WithName("xUserBehaviors"))
 	xUserBehaviorMatrix := G.NewMatrix(g, dt, G.WithShape(batchSize, uBehaviorSize*uBehaviorDim), G.WithName("xUserBehaviorMatrix"))
 	xItemFeature := G.NewMatrix(g, dt, G.WithShape(batchSize, iFeatureDim), G.WithName("xItemFeature"))
 	xCtxFeature := G.NewMatrix(g, dt, G.WithShape(batchSize, cFeatureDim), G.WithName("xCtxFeature"))
 	y := G.NewTensor(g, dt, 2, G.WithShape(batchSize, 1), G.WithName("y"))
-	m := NewDinNet(g, uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim)
+	//m := NewDinNet(g, uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim)
 	if err = m.Fwd(xUserProfile, xUserBehaviorMatrix, xItemFeature, xCtxFeature, batchSize, uBehaviorSize, uBehaviorDim); err != nil {
 		log.Fatalf("%+v", err)
 	}
 
 	//losses := G.Must(G.HadamardProd(G.Must(G.Neg(G.Must(G.Log(m.out)))), y))
-	losses := G.Must(G.Square(G.Must(G.Sub(m.out, y))))
+	losses := G.Must(G.Square(G.Must(G.Sub(m.Out(), y))))
 	cost := G.Must(G.Mean(losses))
 	//cost = G.Must(G.Neg(cost))
 
@@ -178,12 +244,15 @@ func Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim in
 	var costVal G.Value
 	G.Read(cost, &costVal)
 
+	var yOut G.Value
+	G.Read(m.Out(), &yOut)
+
 	if _, err = G.Grad(cost, m.learnable()...); err != nil {
 		log.Fatal(err)
 	}
 
 	// debug
-	ioutil.WriteFile("fullGraph.dot", []byte(g.ToDot()), 0644)
+	//ioutil.WriteFile("fullGraph.dot", []byte(g.ToDot()), 0644)
 	// log.Printf("%v", prog)
 	// logger := log.New(os.Stderr, "", 0)
 	// vm := gorgonia.NewTapeMachine(g, gorgonia.BindDualValues(m.learnable()...), gorgonia.WithLogger(logger), gorgonia.WithWatchlist())
@@ -197,8 +266,11 @@ func Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim in
 	vm := G.NewTapeMachine(g,
 		G.WithPrecompiled(prog, locMap),
 		G.BindDualValues(m.learnable()...),
+		//G.TraceExec(),
+		//G.WithInfWatch(),
+		//G.WithNaNWatch(),
 		//G.WithLogger(log.New(os.Stderr, "", 0)),
-		//G.WithWatchlist(m.mlp0, m.mlp1, m.mlp2),
+		//G.WithWatchlist(m.mlp2),
 	)
 	//solver := G.NewRMSPropSolver(G.WithBatchSize(float64(batchSize)))
 	solver := G.NewAdamSolver(G.WithLearnRate(0.001))
@@ -279,6 +351,47 @@ func Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim in
 			bar.Increment()
 		}
 		log.Printf("Epoch %d | cost %v", i, costVal)
+
+		//log.Printf("Test accuracy %v | rocauc %v")
 	}
 	return
+}
+
+//func BatchPredict(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim int,
+//	si *rcmd.SampleInfo,
+//	numTestExamples int,
+//	batchSize int,
+//	testInputs, testTargets tensor.Tensor,
+//	g *G.ExprGraph,
+//	m model,
+//) (rocAuc float64, accuracy float64, err error) {
+//	xUserProfile := G.NewMatrix(g, dt, G.WithShape(batchSize, uProfileDim), G.WithName("xUserProfile"))
+//	//xUserBehaviors := G.NewTensor(g, dt, 3, G.WithShape(batchSize, uBehaviorSize, uBehaviorDim), G.WithName("xUserBehaviors"))
+//	xUserBehaviorMatrix := G.NewMatrix(g, dt, G.WithShape(batchSize, uBehaviorSize*uBehaviorDim), G.WithName("xUserBehaviorMatrix"))
+//	xItemFeature := G.NewMatrix(g, dt, G.WithShape(batchSize, iFeatureDim), G.WithName("xItemFeature"))
+//	xCtxFeature := G.NewMatrix(g, dt, G.WithShape(batchSize, cFeatureDim), G.WithName("xCtxFeature"))
+//	y := G.NewVector(g, dt, G.WithShape(batchSize), G.WithName("y"))
+//	if err = m.Fwd(xUserProfile, xUserBehaviorMatrix, xItemFeature, xCtxFeature, batchSize, uBehaviorSize, uBehaviorDim); err != nil {
+//		log.Fatalf("%+v", err)
+//	}
+//
+//
+//}
+
+func accuracy(prediction, y []float64) float64 {
+	var ok float64
+	for i := 0; i < len(prediction); i++ {
+		if math.Round(prediction[i]-y[i]) == 0 {
+			ok += 1.0
+		}
+	}
+	return ok / float64(len(y))
+}
+
+func rocauc(pred, y []float64) float64 {
+	boolY := make([]bool, len(y))
+	for i := 0; i < len(y); i++ {
+		boolY[i] = y[i] == 1.0
+	}
+	return utils.RocAuc(boolY, pred)
 }
