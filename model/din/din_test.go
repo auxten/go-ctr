@@ -16,14 +16,14 @@ func TestDin(t *testing.T) {
 	log.SetLevel(log.DebugLevel)
 	rand.Seed(42)
 	var (
-		batchSize     = 20
+		batchSize     = 200
 		uProfileDim   = 5
 		uBehaviorSize = 3
 		uBehaviorDim  = 7
 		iFeatureDim   = 7
 		cFeatureDim   = 5
 
-		numExamples = 10000
+		numExamples = 100000
 		epochs      = 20
 		sampleInfo  = &rcmd.SampleInfo{
 			UserProfileRange:  [2]int{0, uProfileDim},
@@ -65,7 +65,7 @@ func TestDin(t *testing.T) {
 		for j := 0; j < uBehaviorDim; j++ {
 			dist2 += math.Abs(inputSlice[i*inputWidth+sampleInfo.UserBehaviorRange[0]+uBehaviorDim+j] - inputSlice[i*inputWidth+sampleInfo.ItemFeatureRange[0]+j])
 		}
-		labelSlice[i] = math.Round((labelSlice[i] + (dist2 / float64(uBehaviorDim) * 0.3)) * 1.1)
+		labelSlice[i] = math.Round((labelSlice[i] + (dist2 / float64(uBehaviorDim))) * 0.6)
 	}
 
 	labels := tensor.New(tensor.WithShape(numExamples, 1), tensor.WithBacking(labelSlice))
