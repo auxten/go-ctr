@@ -6,7 +6,6 @@ import (
 	"math"
 	"math/rand"
 	_ "net/http/pprof"
-	"time"
 
 	rcmd "github.com/auxten/edgeRec/recommend"
 	"github.com/auxten/edgeRec/utils"
@@ -190,7 +189,8 @@ func Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim in
 	//losses := G.Must(G.HadamardProd(G.Must(G.Neg(G.Must(G.Log(m.out)))), y))
 	//losses := G.Must(G.Square(G.Must(G.Sub(m.Out(), y))))
 	positive := G.Must(G.HadamardProd(G.Must(G.Log(m.Out())), y))
-	negative := G.Must(G.HadamardProd(G.Must(G.Log(G.Must(G.Sub(G.NewConstant(1.0), m.Out())))), G.Must(G.Sub(G.NewConstant(1.0), y))))
+	negative := G.Must(G.HadamardProd(G.Must(G.Log(G.Must(G.Sub(G.NewConstant(float64(1.00000001)), m.Out())))), G.Must(G.Sub(G.NewConstant(float64(1.0)), y))))
+	//negative := G.Must(G.Log(G.Must(G.Sub(G.NewConstant(float64(1.000000001)), m.Out()))))
 	cost := G.Must(G.Neg(G.Must(G.Mean(G.Must(G.Add(positive, negative))))))
 
 	// we want to track costs
@@ -234,8 +234,6 @@ func Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim in
 	batches := numExamples / batchSize
 	log.Printf("Batches %d", batches)
 	bar := pb.New(batches)
-	bar.SetRefreshRate(time.Second)
-	bar.SetMaxWidth(80)
 
 	for i := 0; i < epochs; i++ {
 		bar.Prefix(fmt.Sprintf("Epoch %d", i))
