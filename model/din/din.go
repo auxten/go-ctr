@@ -88,8 +88,8 @@ func NewDinNet(g *G.ExprGraph,
 		att0: att0,
 		att1: att1,
 
-		d0: 0.001,
-		d1: 0.001,
+		d0: 0.01,
+		d1: 0.01,
 
 		mlp0: mlp0,
 		mlp1: mlp1,
@@ -188,9 +188,10 @@ func Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim in
 	}
 
 	//losses := G.Must(G.HadamardProd(G.Must(G.Neg(G.Must(G.Log(m.out)))), y))
-	losses := G.Must(G.Square(G.Must(G.Sub(m.Out(), y))))
-	cost := G.Must(G.Mean(losses))
-	//cost = G.Must(G.Neg(cost))
+	//losses := G.Must(G.Square(G.Must(G.Sub(m.Out(), y))))
+	positive := G.Must(G.HadamardProd(G.Must(G.Log(m.Out())), y))
+	negative := G.Must(G.HadamardProd(G.Must(G.Log(G.Must(G.Sub(G.NewConstant(1.0), m.Out())))), G.Must(G.Sub(G.NewConstant(1.0), y))))
+	cost := G.Must(G.Neg(G.Must(G.Mean(G.Must(G.Add(positive, negative))))))
 
 	// we want to track costs
 	var costVal G.Value
@@ -327,7 +328,7 @@ func Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim in
 //		log.Fatalf("%+v", err)
 //	}
 //
-//
+//	return
 //}
 
 func accuracy(prediction, y []float64) float64 {

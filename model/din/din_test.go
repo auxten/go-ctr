@@ -16,7 +16,7 @@ func TestDin(t *testing.T) {
 	log.SetLevel(log.DebugLevel)
 	rand.Seed(42)
 	var (
-		batchSize     = 100
+		batchSize     = 20
 		uProfileDim   = 5
 		uBehaviorSize = 3
 		uBehaviorDim  = 7
@@ -41,17 +41,33 @@ func TestDin(t *testing.T) {
 		for j := sampleInfo.CtxFeatureRange[0]; j < sampleInfo.CtxFeatureRange[1]; j++ {
 			inputSlice[i*inputWidth+j] = rand.Float64()
 		}
+		for j := sampleInfo.UserBehaviorRange[0] + uBehaviorDim; j < sampleInfo.UserBehaviorRange[0]+2*uBehaviorDim; j++ {
+			inputSlice[i*inputWidth+j] = rand.Float64()
+		}
+		for j := sampleInfo.ItemFeatureRange[0]; j < sampleInfo.ItemFeatureRange[1]; j++ {
+			inputSlice[i*inputWidth+j] = rand.Float64()
+		}
 	}
+	//for i := 0; i < numExamples*inputWidth; i++ {
+	//	inputSlice[i] = rand.Float64()
+	//}
 	inputs := tensor.New(tensor.WithShape(numExamples, inputWidth), tensor.WithBacking(inputSlice))
 	labelSlice := make([]float64, numExamples)
 	for i := 0; i < numExamples; i++ {
 		//distance of uProfile and cFeature slice
-		var dist float64
-		for j := sampleInfo.UserProfileRange[0]; j < sampleInfo.UserProfileRange[1]; j++ {
-			dist += math.Abs(inputSlice[i*inputWidth+j] - inputSlice[i*inputWidth+j+sampleInfo.CtxFeatureRange[0]])
+		var dist1, dist2 float64
+		for j := 0; j < uProfileDim; j++ {
+			dist1 += math.Abs(inputSlice[i*inputWidth+sampleInfo.UserProfileRange[0]+j] - inputSlice[i*inputWidth+sampleInfo.CtxFeatureRange[0]+j])
 		}
-		labelSlice[i] = math.Round(dist / float64(uProfileDim) * 1.5)
+		labelSlice[i] = dist1 / float64(uProfileDim)
+
+		//distance of 2nd uBehavior and iFeature
+		for j := 0; j < uBehaviorDim; j++ {
+			dist2 += math.Abs(inputSlice[i*inputWidth+sampleInfo.UserBehaviorRange[0]+uBehaviorDim+j] - inputSlice[i*inputWidth+sampleInfo.ItemFeatureRange[0]+j])
+		}
+		labelSlice[i] = math.Round((labelSlice[i] + (dist2 / float64(uBehaviorDim) * 0.3)) * 1.1)
 	}
+
 	labels := tensor.New(tensor.WithShape(numExamples, 1), tensor.WithBacking(labelSlice))
 	log.Debugf("labels: %+v", labels.Data())
 
