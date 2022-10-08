@@ -78,7 +78,6 @@ func TestDin(t *testing.T) {
 			numExamples, batchSize, epochs,
 			sampleInfo,
 			inputs, labels,
-			g,
 			model,
 		)
 		So(err, ShouldBeNil)
@@ -91,7 +90,6 @@ func TestDin(t *testing.T) {
 			numExamples, batchSize, epochs,
 			sampleInfo,
 			inputs, labels,
-			g,
 			model,
 		)
 		So(err, ShouldBeNil)
