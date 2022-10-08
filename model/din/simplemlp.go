@@ -6,6 +6,7 @@ import (
 )
 
 type SimpleMLP struct {
+	g                *G.ExprGraph
 	mlp0, mlp1, mlp2 *G.Node
 	d0, d1           float64 // dropout probabilities
 	out              *G.Node
@@ -20,12 +21,17 @@ func NewSimpleMLP(g *G.ExprGraph,
 	mlp1 := G.NewMatrix(g, G.Float64, G.WithShape(200, 80), G.WithName("mlp1"), G.WithInit(G.Gaussian(0, 1)))
 	mlp2 := G.NewMatrix(g, G.Float64, G.WithShape(80, 1), G.WithName("mlp2"), G.WithInit(G.Gaussian(0, 1)))
 	return &SimpleMLP{
+		g:    g,
 		d0:   0.01,
 		d1:   0.01,
 		mlp0: mlp0,
 		mlp1: mlp1,
 		mlp2: mlp2,
 	}
+}
+
+func (mlp *SimpleMLP) Graph() *G.ExprGraph {
+	return mlp.g
 }
 
 func (mlp *SimpleMLP) Out() *G.Node {

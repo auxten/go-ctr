@@ -22,6 +22,7 @@ type model interface {
 	learnable() G.Nodes
 	Fwd(xUserProfile, ubMatrix, xItemFeature, xCtxFeature *G.Node, batchSize, uBehaviorSize, uBehaviorDim int) (err error)
 	Out() *G.Node
+	Graph() *G.ExprGraph
 }
 
 type DinNet struct {
@@ -35,6 +36,10 @@ type DinNet struct {
 	att0, att1       []*G.Node // weights of Attention layers
 
 	out *G.Node
+}
+
+func (din *DinNet) Graph() *G.ExprGraph {
+	return din.g
 }
 
 func (din *DinNet) Out() *G.Node {
@@ -123,7 +128,7 @@ func (din *DinNet) Fwd(xUserProfile, ubMatrix, xItemFeature, xCtxFeature *G.Node
 	outProductsVec := G.Must(G.Concat(0, outProdVecs...))
 	outProducts := G.Must(G.Reshape(outProductsVec, tensor.Shape{batchSize, uBehaviorSize * uBehaviorDim * iFeatureDim}))
 
-	actOuts := G.NewTensor(din.g, dt, 2, G.WithShape(batchSize, uBehaviorDim), G.WithName("actOuts"), G.WithInit(G.Zeroes()))
+	actOuts := G.NewTensor(din.Graph(), dt, 2, G.WithShape(batchSize, uBehaviorDim), G.WithName("actOuts"), G.WithInit(G.Zeroes()))
 	for i := 0; i < uBehaviorSize; i++ {
 		// xUserBehaviors[:, i, :], ub.shape: [batchSize, uBehaviorDim]
 		ub := G.Must(G.Slice(xUserBehaviors, []tensor.Slice{nil, G.S(i)}...))
@@ -170,11 +175,11 @@ func Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim in
 	si *rcmd.SampleInfo,
 	inputs, targets tensor.Tensor,
 	//testInputs, testTargets tensor.Tensor,
-	g *G.ExprGraph,
 	m model,
 ) (err error) {
 	rand.Seed(2120)
 
+	g := m.Graph()
 	xUserProfile := G.NewMatrix(g, dt, G.WithShape(batchSize, uProfileDim), G.WithName("xUserProfile"))
 	//xUserBehaviors := G.NewTensor(g, dt, 3, G.WithShape(batchSize, uBehaviorSize, uBehaviorDim), G.WithName("xUserBehaviors"))
 	xUserBehaviorMatrix := G.NewMatrix(g, dt, G.WithShape(batchSize, uBehaviorSize*uBehaviorDim), G.WithName("xUserBehaviorMatrix"))
@@ -189,7 +194,7 @@ func Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim in
 	//losses := G.Must(G.HadamardProd(G.Must(G.Neg(G.Must(G.Log(m.out)))), y))
 	//losses := G.Must(G.Square(G.Must(G.Sub(m.Out(), y))))
 	positive := G.Must(G.HadamardProd(G.Must(G.Log(m.Out())), y))
-	negative := G.Must(G.HadamardProd(G.Must(G.Log(G.Must(G.Sub(G.NewConstant(float64(1.00000001)), m.Out())))), G.Must(G.Sub(G.NewConstant(float64(1.0)), y))))
+	negative := G.Must(G.HadamardProd(G.Must(G.Log(G.Must(G.Sub(G.NewConstant(float64(1.0+1e-8)), m.Out())))), G.Must(G.Sub(G.NewConstant(float64(1.0)), y))))
 	//negative := G.Must(G.Log(G.Must(G.Sub(G.NewConstant(float64(1.000000001)), m.Out()))))
 	cost := G.Must(G.Neg(G.Must(G.Mean(G.Must(G.Add(positive, negative))))))
 
@@ -308,26 +313,27 @@ func Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim in
 	return
 }
 
-//func BatchPredict(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim int,
-//	si *rcmd.SampleInfo,
-//	numTestExamples int,
-//	batchSize int,
-//	testInputs, testTargets tensor.Tensor,
-//	g *G.ExprGraph,
-//	m model,
-//) (rocAuc float64, accuracy float64, err error) {
-//	xUserProfile := G.NewMatrix(g, dt, G.WithShape(batchSize, uProfileDim), G.WithName("xUserProfile"))
-//	//xUserBehaviors := G.NewTensor(g, dt, 3, G.WithShape(batchSize, uBehaviorSize, uBehaviorDim), G.WithName("xUserBehaviors"))
-//	xUserBehaviorMatrix := G.NewMatrix(g, dt, G.WithShape(batchSize, uBehaviorSize*uBehaviorDim), G.WithName("xUserBehaviorMatrix"))
-//	xItemFeature := G.NewMatrix(g, dt, G.WithShape(batchSize, iFeatureDim), G.WithName("xItemFeature"))
-//	xCtxFeature := G.NewMatrix(g, dt, G.WithShape(batchSize, cFeatureDim), G.WithName("xCtxFeature"))
-//	y := G.NewVector(g, dt, G.WithShape(batchSize), G.WithName("y"))
-//	if err = m.Fwd(xUserProfile, xUserBehaviorMatrix, xItemFeature, xCtxFeature, batchSize, uBehaviorSize, uBehaviorDim); err != nil {
-//		log.Fatalf("%+v", err)
-//	}
-//
-//	return
-//}
+func BatchPredict(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim int,
+	si *rcmd.SampleInfo,
+	numTestExamples int,
+	batchSize int,
+	testInputs, testTargets tensor.Tensor,
+	m model,
+) (rocAuc float64, accuracy float64, err error) {
+	g := m.Graph()
+	xUserProfile := G.NewMatrix(g, dt, G.WithShape(batchSize, uProfileDim), G.WithName("xUserProfile"))
+	//xUserBehaviors := G.NewTensor(g, dt, 3, G.WithShape(batchSize, uBehaviorSize, uBehaviorDim), G.WithName("xUserBehaviors"))
+	xUserBehaviorMatrix := G.NewMatrix(g, dt, G.WithShape(batchSize, uBehaviorSize*uBehaviorDim), G.WithName("xUserBehaviorMatrix"))
+	xItemFeature := G.NewMatrix(g, dt, G.WithShape(batchSize, iFeatureDim), G.WithName("xItemFeature"))
+	xCtxFeature := G.NewMatrix(g, dt, G.WithShape(batchSize, cFeatureDim), G.WithName("xCtxFeature"))
+	//y := G.NewVector(g, dt, G.WithShape(batchSize), G.WithName("y"))
+	if err = m.Fwd(xUserProfile, xUserBehaviorMatrix, xItemFeature, xCtxFeature,
+		batchSize, uBehaviorSize, uBehaviorDim); err != nil {
+		log.Fatalf("%+v", err)
+	}
+
+	return
+}
 
 func accuracy(prediction, y []float64) float64 {
 	var ok float64
