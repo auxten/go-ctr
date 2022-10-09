@@ -1,25 +1,99 @@
 package din
 
 import (
+	"encoding/json"
+
 	G "gorgonia.org/gorgonia"
 	"gorgonia.org/tensor"
 )
 
 type SimpleMLP struct {
-	g                *G.ExprGraph
+	g  *G.ExprGraph
+	vm G.VM
+	//input nodes
+	xUserProfile, xUbMatrix, xItemFeature, xCtxFeature *G.Node
+	//learnable nodes
 	mlp0, mlp1, mlp2 *G.Node
 	d0, d1           float64 // dropout probabilities
 	out              *G.Node
 }
 
-func NewSimpleMLP(g *G.ExprGraph,
+func (mlp *SimpleMLP) In() G.Nodes {
+	return G.Nodes{mlp.xUserProfile, mlp.xUbMatrix, mlp.xItemFeature, mlp.xCtxFeature}
+}
+
+type mlpModel struct {
+	UProfileDim   int       `json:"uProfileDim"`
+	UBehaviorSize int       `json:"uBehaviorSize"`
+	UBehaviorDim  int       `json:"uBehaviorDim"`
+	IFeatureDim   int       `json:"iFeatureDim"`
+	CFeatureDim   int       `json:"cFeatureDim"`
+	Mlp0          []float64 `json:"mlp0"`
+	Mlp1          []float64 `json:"mlp1"`
+	Mlp2          []float64 `json:"mlp2"`
+}
+
+func (mlp *SimpleMLP) Marshal() (data []byte, err error) {
+	model := mlpModel{
+		UProfileDim:   mlp.xUserProfile.Shape()[1],
+		UBehaviorSize: mlp.xUbMatrix.Shape()[1],
+		UBehaviorDim:  mlp.xUbMatrix.Shape()[2],
+		IFeatureDim:   mlp.xItemFeature.Shape()[1],
+		CFeatureDim:   mlp.xCtxFeature.Shape()[1],
+		Mlp0:          mlp.mlp0.Value().Data().([]float64),
+		Mlp1:          mlp.mlp1.Value().Data().([]float64),
+		Mlp2:          mlp.mlp2.Value().Data().([]float64),
+	}
+	return json.Marshal(model)
+}
+
+func NewSimpleMlpFromJson(data []byte) (mlp *SimpleMLP, err error) {
+	var m mlpModel
+	if err = json.Unmarshal(data, &m); err != nil {
+		return
+	}
+	var (
+		g             = G.NewGraph()
+		uProfileDim   = m.UProfileDim
+		uBehaviorSize = m.UBehaviorSize
+		uBehaviorDim  = m.UBehaviorDim
+		iFeatureDim   = m.IFeatureDim
+		cFeatureDim   = m.CFeatureDim
+	)
+
+	mlp0 := G.NewMatrix(g, dt, G.WithShape(uProfileDim+uBehaviorSize*uBehaviorDim+iFeatureDim+cFeatureDim, mlp0_1), G.WithName("mlp0"), G.WithValue(m.Mlp0))
+
+	mlp1 := G.NewMatrix(g, dt, G.WithShape(mlp0_1, mlp1_2), G.WithName("mlp1"), G.WithValue(m.Mlp1))
+
+	mlp2 := G.NewMatrix(g, dt, G.WithShape(mlp1_2, 1), G.WithName("mlp2"), G.WithValue(m.Mlp2))
+
+	mlp = &SimpleMLP{
+		g:    g,
+		mlp0: mlp0,
+		mlp1: mlp1,
+		mlp2: mlp2,
+	}
+
+	return
+}
+
+func (mlp *SimpleMLP) Vm() G.VM {
+	return mlp.vm
+}
+
+func (mlp *SimpleMLP) SetVM(vm G.VM) {
+	mlp.vm = vm
+}
+
+func NewSimpleMLP(
 	uProfileDim, uBehaviorSize, uBehaviorDim int,
 	iFeatureDim int,
-	ctxFeatureDim int,
+	cFeatureDim int,
 ) (mlp *SimpleMLP) {
-	mlp0 := G.NewMatrix(g, G.Float64, G.WithShape(uProfileDim+uBehaviorSize*uBehaviorDim+iFeatureDim+ctxFeatureDim, 200), G.WithName("mlp0"), G.WithInit(G.Gaussian(0, 1)))
-	mlp1 := G.NewMatrix(g, G.Float64, G.WithShape(200, 80), G.WithName("mlp1"), G.WithInit(G.Gaussian(0, 1)))
-	mlp2 := G.NewMatrix(g, G.Float64, G.WithShape(80, 1), G.WithName("mlp2"), G.WithInit(G.Gaussian(0, 1)))
+	g := G.NewGraph()
+	mlp0 := G.NewMatrix(g, G.Float64, G.WithShape(uProfileDim+uBehaviorSize*uBehaviorDim+iFeatureDim+cFeatureDim, mlp0_1), G.WithName("mlp0"), G.WithInit(G.Gaussian(0, 1)))
+	mlp1 := G.NewMatrix(g, G.Float64, G.WithShape(mlp0_1, mlp1_2), G.WithName("mlp1"), G.WithInit(G.Gaussian(0, 1)))
+	mlp2 := G.NewMatrix(g, G.Float64, G.WithShape(mlp1_2, 1), G.WithName("mlp2"), G.WithInit(G.Gaussian(0, 1)))
 	return &SimpleMLP{
 		g:    g,
 		d0:   0.01,
