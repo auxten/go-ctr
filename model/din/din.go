@@ -1,8 +1,8 @@
 package din
 
 import (
+	"encoding/json"
 	"fmt"
-	"log"
 	"math"
 	"math/rand"
 	_ "net/http/pprof"
@@ -10,6 +10,7 @@ import (
 	rcmd "github.com/auxten/edgeRec/recommend"
 	"github.com/auxten/edgeRec/utils"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 	G "gorgonia.org/gorgonia"
 	"gorgonia.org/tensor"
 
@@ -18,11 +19,22 @@ import (
 
 var dt = tensor.Float64
 
-type model interface {
+const (
+	// magic numbers for din paper
+	att0_1 = 36
+	mlp0_1 = 200
+	mlp1_2 = 80
+)
+
+type Model interface {
 	learnable() G.Nodes
 	Fwd(xUserProfile, ubMatrix, xItemFeature, xCtxFeature *G.Node, batchSize, uBehaviorSize, uBehaviorDim int) (err error)
 	Out() *G.Node
+	In() G.Nodes
 	Graph() *G.ExprGraph
+	Marshal() (data []byte, err error)
+	Vm() G.VM
+	SetVM(vm G.VM)
 }
 
 type DinNet struct {
@@ -30,12 +42,117 @@ type DinNet struct {
 	iFeatureDim                              int
 	cFeatureDim                              int
 
-	g                *G.ExprGraph
+	g *G.ExprGraph
+
+	vm G.VM
+
+	//input nodes
+	xUserProfile, xUbMatrix, xItemFeature, xCtxFeature *G.Node
+
 	mlp0, mlp1, mlp2 *G.Node   // weights of MLP layers
 	d0, d1           float64   // dropout probabilities
 	att0, att1       []*G.Node // weights of Attention layers
 
 	out *G.Node
+}
+
+type dinModel struct {
+	UProfileDim   int         `json:"uProfileDim"`
+	UBehaviorSize int         `json:"uBehaviorSize"`
+	UBehaviorDim  int         `json:"uBehaviorDim"`
+	IFeatureDim   int         `json:"iFeatureDim"`
+	CFeatureDim   int         `json:"cFeatureDim"`
+	Mlp0          []float64   `json:"mlp0"`
+	Mlp1          []float64   `json:"mlp1"`
+	Mlp2          []float64   `json:"mlp2"`
+	Att0          [][]float64 `json:"att0"`
+	Att1          [][]float64 `json:"att1"`
+}
+
+func (din *DinNet) Vm() G.VM {
+	return din.vm
+}
+
+func (din *DinNet) SetVM(vm G.VM) {
+	din.vm = vm
+}
+
+func (din *DinNet) Marshal() (data []byte, err error) {
+	modelData := dinModel{
+		UProfileDim:   din.uProfileDim,
+		UBehaviorSize: din.uBehaviorSize,
+		UBehaviorDim:  din.uBehaviorDim,
+		IFeatureDim:   din.iFeatureDim,
+		CFeatureDim:   din.cFeatureDim,
+		Mlp0:          din.mlp0.Value().Data().([]float64),
+		Mlp1:          din.mlp1.Value().Data().([]float64),
+		Mlp2:          din.mlp2.Value().Data().([]float64),
+	}
+	modelData.Att0 = make([][]float64, din.uBehaviorSize)
+	modelData.Att1 = make([][]float64, din.uBehaviorSize)
+	for i := 0; i < din.uBehaviorSize; i++ {
+		modelData.Att0[i] = din.att0[i].Value().Data().([]float64)
+		modelData.Att1[i] = din.att1[i].Value().Data().([]float64)
+	}
+	//marshal to json
+	data, err = json.Marshal(modelData)
+
+	return
+}
+
+func NewDinNetFromJson(data []byte) (din *DinNet, err error) {
+	var m dinModel
+	if err = json.Unmarshal(data, &m); err != nil {
+		return
+	}
+	var (
+		g             = G.NewGraph()
+		uProfileDim   = m.UProfileDim
+		uBehaviorSize = m.UBehaviorSize
+		uBehaviorDim  = m.UBehaviorDim
+		iFeatureDim   = m.IFeatureDim
+		cFeatureDim   = m.CFeatureDim
+	)
+
+	// attention layer
+	att0 := make([]*G.Node, m.UBehaviorSize)
+	att1 := make([]*G.Node, m.UBehaviorSize)
+	for i := 0; i < m.UBehaviorSize; i++ {
+		att0[i] = G.NewMatrix(
+			g,
+			dt,
+			G.WithShape(uBehaviorDim+iFeatureDim+uBehaviorSize*uBehaviorDim*iFeatureDim, att0_1),
+			G.WithValue(m.Att0[i]),
+			G.WithName(fmt.Sprintf("att0-%d", i)),
+		)
+		att1[i] = G.NewMatrix(
+			g,
+			dt,
+			G.WithShape(att0_1, 1),
+			G.WithValue(m.Att1[i]),
+			G.WithName(fmt.Sprintf("att1-%d", i)),
+		)
+	}
+	mlp0 := G.NewMatrix(g, dt, G.WithShape(uProfileDim+uBehaviorDim+iFeatureDim+cFeatureDim, mlp0_1), G.WithName("mlp0"), G.WithValue(m.Mlp0))
+
+	mlp1 := G.NewMatrix(g, dt, G.WithShape(mlp0_1, mlp1_2), G.WithName("mlp1"), G.WithValue(m.Mlp1))
+
+	mlp2 := G.NewMatrix(g, dt, G.WithShape(mlp1_2, 1), G.WithName("mlp2"), G.WithValue(m.Mlp2))
+
+	din = &DinNet{
+		uProfileDim:   m.UProfileDim,
+		uBehaviorSize: m.UBehaviorSize,
+		uBehaviorDim:  m.UBehaviorDim,
+		iFeatureDim:   m.IFeatureDim,
+		cFeatureDim:   m.CFeatureDim,
+		g:             g,
+		att0:          att0,
+		att1:          att1,
+		mlp0:          mlp0,
+		mlp1:          mlp1,
+		mlp2:          mlp2,
+	}
+	return
 }
 
 func (din *DinNet) Graph() *G.ExprGraph {
@@ -44,6 +161,10 @@ func (din *DinNet) Graph() *G.ExprGraph {
 
 func (din *DinNet) Out() *G.Node {
 	return din.out
+}
+
+func (din *DinNet) In() G.Nodes {
+	return G.Nodes{din.xUserProfile, din.xUbMatrix, din.xItemFeature, din.xCtxFeature}
 }
 
 func (din *DinNet) learnable() G.Nodes {
@@ -56,37 +177,38 @@ func (din *DinNet) learnable() G.Nodes {
 	return ret
 }
 
-func NewDinNet(g *G.ExprGraph,
+func NewDinNet(
 	uProfileDim, uBehaviorSize, uBehaviorDim int,
 	iFeatureDim int,
-	ctxFeatureDim int,
+	cFeatureDim int,
 ) *DinNet {
 	if uBehaviorDim != iFeatureDim {
 		log.Fatalf("uBehaviorDim %d != iFeatureDim %d", uBehaviorDim, iFeatureDim)
 	}
+	g := G.NewGraph()
 	// attention layer
 	att0 := make([]*G.Node, uBehaviorSize)
 	att1 := make([]*G.Node, uBehaviorSize)
 	for i := 0; i < uBehaviorSize; i++ {
-		att0[i] = G.NewTensor(g, dt, 2, G.WithShape(uBehaviorDim+iFeatureDim+uBehaviorSize*uBehaviorDim*iFeatureDim, 36), G.WithName(fmt.Sprintf("att0-%d", i)), G.WithInit(G.Gaussian(0, 1)))
-		att1[i] = G.NewTensor(g, dt, 2, G.WithShape(36, 1), G.WithName(fmt.Sprintf("att1-%d", i)), G.WithInit(G.Gaussian(0, 1)))
+		att0[i] = G.NewTensor(g, dt, 2, G.WithShape(uBehaviorDim+iFeatureDim+uBehaviorSize*uBehaviorDim*iFeatureDim, att0_1), G.WithName(fmt.Sprintf("att0-%d", i)), G.WithInit(G.Gaussian(0, 1)))
+		att1[i] = G.NewTensor(g, dt, 2, G.WithShape(att0_1, 1), G.WithName(fmt.Sprintf("att1-%d", i)), G.WithInit(G.Gaussian(0, 1)))
 	}
 
 	// user behaviors are represented as a sequence of item embeddings. Before
 	// being fed into the MLP, we need to flatten the sequence into a single with
 	// sum pooling with Attention as the weights which is the key point of DIN model.
-	mlp0 := G.NewMatrix(g, G.Float64, G.WithShape(uProfileDim+uBehaviorDim+iFeatureDim+ctxFeatureDim, 200), G.WithName("mlp0"), G.WithInit(G.Gaussian(0, 1)))
+	mlp0 := G.NewMatrix(g, dt, G.WithShape(uProfileDim+uBehaviorDim+iFeatureDim+cFeatureDim, mlp0_1), G.WithName("mlp0"), G.WithInit(G.Gaussian(0, 1)))
 
-	mlp1 := G.NewMatrix(g, G.Float64, G.WithShape(200, 80), G.WithName("mlp1"), G.WithInit(G.Gaussian(0, 1)))
+	mlp1 := G.NewMatrix(g, dt, G.WithShape(mlp0_1, mlp1_2), G.WithName("mlp1"), G.WithInit(G.Gaussian(0, 1)))
 
-	mlp2 := G.NewMatrix(g, G.Float64, G.WithShape(80, 1), G.WithName("mlp2"), G.WithInit(G.Gaussian(0, 1)))
+	mlp2 := G.NewMatrix(g, dt, G.WithShape(mlp1_2, 1), G.WithName("mlp2"), G.WithInit(G.Gaussian(0, 1)))
 
 	return &DinNet{
 		uProfileDim:   uProfileDim,
 		uBehaviorSize: uBehaviorSize,
 		uBehaviorDim:  uBehaviorDim,
 		iFeatureDim:   iFeatureDim,
-		cFeatureDim:   ctxFeatureDim,
+		cFeatureDim:   cFeatureDim,
 
 		g:    g,
 		att0: att0,
@@ -106,18 +228,18 @@ func NewDinNet(g *G.ExprGraph,
 // xUserBehaviors: [batchSize, uBehaviorSize, uBehaviorDim]
 // xItemFeature: [batchSize, iFeatureDim]
 // xContextFeature: [batchSize, cFeatureDim]
-func (din *DinNet) Fwd(xUserProfile, ubMatrix, xItemFeature, xCtxFeature *G.Node, batchSize, uBehaviorSize, uBehaviorDim int) (err error) {
+func (din *DinNet) Fwd(xUserProfile, xUbMatrix, xItemFeature, xCtxFeature *G.Node, batchSize, uBehaviorSize, uBehaviorDim int) (err error) {
 	iFeatureDim := xItemFeature.Shape()[1]
 	if uBehaviorDim != iFeatureDim {
 		return errors.Errorf("uBehaviorDim %d != iFeatureDim %d", uBehaviorDim, iFeatureDim)
 	}
-	xUserBehaviors := G.Must(G.Reshape(ubMatrix, tensor.Shape{batchSize, uBehaviorSize, uBehaviorDim}))
+	xUserBehaviors := G.Must(G.Reshape(xUbMatrix, tensor.Shape{batchSize, uBehaviorSize, uBehaviorDim}))
 
 	// outProduct should computed batch by batch!!!!
 	outProdVecs := make([]*G.Node, batchSize)
 	for i := 0; i < batchSize; i++ {
 		// ubVec.Shape() = [uBehaviorSize * uBehaviorDim]
-		ubVec := G.Must(G.Slice(ubMatrix, G.S(i)))
+		ubVec := G.Must(G.Slice(xUbMatrix, G.S(i)))
 		// item.Shape() = [iFeatureDim]
 		itemVec := G.Must(G.Slice(xItemFeature, G.S(i)))
 		// outProd.Shape() = [uBehaviorSize * uBehaviorDim, iFeatureDim]
@@ -167,6 +289,10 @@ func (din *DinNet) Fwd(xUserProfile, ubMatrix, xItemFeature, xCtxFeature *G.Node
 	mlp2Out := G.Must(G.Sigmoid(G.Must(G.Mul(mlp1Out, din.mlp2))))
 
 	din.out = mlp2Out
+	din.xUserProfile = xUserProfile
+	din.xItemFeature = xItemFeature
+	din.xCtxFeature = xCtxFeature
+	din.xUbMatrix = xUbMatrix
 	return
 }
 
@@ -175,7 +301,7 @@ func Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim in
 	si *rcmd.SampleInfo,
 	inputs, targets tensor.Tensor,
 	//testInputs, testTargets tensor.Tensor,
-	m model,
+	m Model,
 ) (err error) {
 	rand.Seed(2120)
 
@@ -230,9 +356,14 @@ func Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim in
 		//G.WithLogger(log.New(os.Stderr, "", 0)),
 		//G.WithWatchlist(m.mlp2),
 	)
+	m.SetVM(vm)
+
 	//solver := G.NewRMSPropSolver(G.WithBatchSize(float64(batchSize)))
 	solver := G.NewAdamSolver(G.WithLearnRate(0.001))
-	defer vm.Close()
+	//defer func() {
+	//	vm.Close()
+	//	m.SetVM(nil)
+	//}()
 	// pprof
 	// handlePprof(sigChan, doneChan)
 
@@ -313,25 +444,113 @@ func Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim in
 	return
 }
 
-func BatchPredict(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim int,
-	si *rcmd.SampleInfo,
-	numTestExamples int,
+func InitForwardOnlyVm(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim int,
 	batchSize int,
-	testInputs, testTargets tensor.Tensor,
-	m model,
-) (rocAuc float64, accuracy float64, err error) {
+	m Model,
+) (err error) {
 	g := m.Graph()
 	xUserProfile := G.NewMatrix(g, dt, G.WithShape(batchSize, uProfileDim), G.WithName("xUserProfile"))
-	//xUserBehaviors := G.NewTensor(g, dt, 3, G.WithShape(batchSize, uBehaviorSize, uBehaviorDim), G.WithName("xUserBehaviors"))
 	xUserBehaviorMatrix := G.NewMatrix(g, dt, G.WithShape(batchSize, uBehaviorSize*uBehaviorDim), G.WithName("xUserBehaviorMatrix"))
 	xItemFeature := G.NewMatrix(g, dt, G.WithShape(batchSize, iFeatureDim), G.WithName("xItemFeature"))
 	xCtxFeature := G.NewMatrix(g, dt, G.WithShape(batchSize, cFeatureDim), G.WithName("xCtxFeature"))
-	//y := G.NewVector(g, dt, G.WithShape(batchSize), G.WithName("y"))
 	if err = m.Fwd(xUserProfile, xUserBehaviorMatrix, xItemFeature, xCtxFeature,
 		batchSize, uBehaviorSize, uBehaviorDim); err != nil {
-		log.Fatalf("%+v", err)
+		return
 	}
+	prog, locMap, err := G.Compile(g)
+	if err != nil {
+		return
+	}
+	//log.Printf("%v", prog)
 
+	vm := G.NewTapeMachine(g,
+		G.WithPrecompiled(prog, locMap),
+	)
+	m.SetVM(vm)
+
+	return
+}
+
+func Predict(m Model, numExamples, batchSize int, si *rcmd.SampleInfo, inputs tensor.Tensor) (y []float64, err error) {
+	//input nodes
+	inputNodes := m.In()
+	xUserProfile := inputNodes[0]
+	xUbMatrix := inputNodes[1]
+	xItemFeature := inputNodes[2]
+	xCtxFeature := inputNodes[3]
+
+	//output node
+	outputNode := m.Out()
+
+	//vm
+	vm := m.Vm()
+
+	batches := numExamples / batchSize
+
+	for b := 0; b < batches; b++ {
+		start := b * batchSize
+		end := start + batchSize
+		if start >= numExamples {
+			break
+		}
+		if end > numExamples {
+			end = numExamples
+		}
+
+		var (
+			xUserProfileVal   tensor.Tensor
+			xUserBehaviorsVal tensor.Tensor
+			xItemFeatureVal   tensor.Tensor
+			xCtxFeatureVal    tensor.Tensor
+		)
+
+		if xUserProfileVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.UserProfileRange[0], si.UserProfileRange[1])}...); err != nil {
+			log.Errorf("Unable to slice xUserProfileVal %v", err)
+			return nil, err
+		}
+		if err = G.Let(xUserProfile, xUserProfileVal); err != nil {
+			log.Errorf("Unable to let xUserProfileVal %v", err)
+			return nil, err
+		}
+
+		if xUserBehaviorsVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.UserBehaviorRange[0], si.UserBehaviorRange[1])}...); err != nil {
+			log.Errorf("Unable to slice xUserBehaviorsVal %v", err)
+			return nil, err
+		}
+		if err = G.Let(xUbMatrix, xUserBehaviorsVal); err != nil {
+			log.Errorf("Unable to let xUserBehaviorsVal %v", err)
+			return nil, err
+		}
+
+		if xItemFeatureVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.ItemFeatureRange[0], si.ItemFeatureRange[1])}...); err != nil {
+			log.Errorf("Unable to slice xItemFeatureVal %v", err)
+			return nil, err
+		}
+		if err = G.Let(xItemFeature, xItemFeatureVal); err != nil {
+			log.Errorf("Unable to let xItemFeatureVal %v", err)
+			return nil, err
+		}
+
+		if xCtxFeatureVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.CtxFeatureRange[0], si.CtxFeatureRange[1])}...); err != nil {
+			log.Errorf("Unable to slice xCtxFeatureVal %v", err)
+			return nil, err
+		}
+		if err = G.Let(xCtxFeature, xCtxFeatureVal); err != nil {
+			log.Errorf("Unable to let xCtxFeatureVal %v", err)
+			return nil, err
+		}
+
+		if err = vm.RunAll(); err != nil {
+			log.Errorf("Failed at batch %d. Error: %v", b, err)
+			return nil, err
+		}
+		vm.Reset()
+
+		//get y
+		yVal := outputNode.Value().Data().([]float64)
+		y = append(y, yVal...)
+
+	}
 	return
 }
 

@@ -8,7 +8,6 @@ import (
 	rcmd "github.com/auxten/edgeRec/recommend"
 	log "github.com/sirupsen/logrus"
 	. "github.com/smartystreets/goconvey/convey"
-	G "gorgonia.org/gorgonia"
 	"gorgonia.org/tensor"
 )
 
@@ -71,26 +70,24 @@ func TestDin(t *testing.T) {
 	labels := tensor.New(tensor.WithShape(numExamples, 1), tensor.WithBacking(labelSlice))
 	log.Debugf("labels: %+v", labels.Data())
 
+	dinModel := NewDinNet(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim)
 	Convey("Din model", t, func() {
-		g := G.NewGraph()
-		model := NewDinNet(g, uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim)
 		err := Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim,
 			numExamples, batchSize, epochs,
 			sampleInfo,
 			inputs, labels,
-			model,
+			dinModel,
 		)
 		So(err, ShouldBeNil)
 	})
 
+	mlpModel := NewSimpleMLP(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim)
 	Convey("Simple MLP", t, func() {
-		g := G.NewGraph()
-		model := NewSimpleMLP(g, uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim)
 		err := Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim,
 			numExamples, batchSize, epochs,
 			sampleInfo,
 			inputs, labels,
-			model,
+			mlpModel,
 		)
 		So(err, ShouldBeNil)
 	})
