@@ -10,6 +10,11 @@ import (
 type SimpleMLP struct {
 	g  *G.ExprGraph
 	vm G.VM
+
+	uProfileDim, uBehaviorSize, uBehaviorDim int
+	iFeatureDim                              int
+	cFeatureDim                              int
+
 	//input nodes
 	xUserProfile, xUbMatrix, xItemFeature, xCtxFeature *G.Node
 	//learnable nodes
@@ -35,11 +40,11 @@ type mlpModel struct {
 
 func (mlp *SimpleMLP) Marshal() (data []byte, err error) {
 	model := mlpModel{
-		UProfileDim:   mlp.xUserProfile.Shape()[1],
-		UBehaviorSize: mlp.xUbMatrix.Shape()[1],
-		UBehaviorDim:  mlp.xUbMatrix.Shape()[2],
-		IFeatureDim:   mlp.xItemFeature.Shape()[1],
-		CFeatureDim:   mlp.xCtxFeature.Shape()[1],
+		UProfileDim:   mlp.uProfileDim,
+		UBehaviorSize: mlp.uBehaviorSize,
+		UBehaviorDim:  mlp.uBehaviorDim,
+		IFeatureDim:   mlp.iFeatureDim,
+		CFeatureDim:   mlp.cFeatureDim,
 		Mlp0:          mlp.mlp0.Value().Data().([]float64),
 		Mlp1:          mlp.mlp1.Value().Data().([]float64),
 		Mlp2:          mlp.mlp2.Value().Data().([]float64),
@@ -47,7 +52,7 @@ func (mlp *SimpleMLP) Marshal() (data []byte, err error) {
 	return json.Marshal(model)
 }
 
-func NewSimpleMlpFromJson(data []byte) (mlp *SimpleMLP, err error) {
+func NewSimpleMLPFromJson(data []byte) (mlp *SimpleMLP, err error) {
 	var m mlpModel
 	if err = json.Unmarshal(data, &m); err != nil {
 		return
@@ -59,19 +64,37 @@ func NewSimpleMlpFromJson(data []byte) (mlp *SimpleMLP, err error) {
 		uBehaviorDim  = m.UBehaviorDim
 		iFeatureDim   = m.IFeatureDim
 		cFeatureDim   = m.CFeatureDim
+		mlp0_0        = uProfileDim + uBehaviorSize*uBehaviorDim + iFeatureDim + cFeatureDim
 	)
 
-	mlp0 := G.NewMatrix(g, dt, G.WithShape(uProfileDim+uBehaviorSize*uBehaviorDim+iFeatureDim+cFeatureDim, mlp0_1), G.WithName("mlp0"), G.WithValue(m.Mlp0))
+	mlp0 := G.NewMatrix(g, dt,
+		G.WithShape(mlp0_0, mlp0_1),
+		G.WithName("mlp0"),
+		G.WithValue(tensor.New(tensor.WithShape(mlp0_0, mlp0_1), tensor.WithBacking(m.Mlp0))),
+	)
 
-	mlp1 := G.NewMatrix(g, dt, G.WithShape(mlp0_1, mlp1_2), G.WithName("mlp1"), G.WithValue(m.Mlp1))
+	mlp1 := G.NewMatrix(g, dt,
+		G.WithShape(mlp0_1, mlp1_2),
+		G.WithName("mlp1"),
+		G.WithValue(tensor.New(tensor.WithShape(mlp0_1, mlp1_2), tensor.WithBacking(m.Mlp1))),
+	)
 
-	mlp2 := G.NewMatrix(g, dt, G.WithShape(mlp1_2, 1), G.WithName("mlp2"), G.WithValue(m.Mlp2))
+	mlp2 := G.NewMatrix(g, dt,
+		G.WithShape(mlp1_2, 1),
+		G.WithName("mlp2"),
+		G.WithValue(tensor.New(tensor.WithShape(mlp1_2, 1), tensor.WithBacking(m.Mlp2))),
+	)
 
 	mlp = &SimpleMLP{
-		g:    g,
-		mlp0: mlp0,
-		mlp1: mlp1,
-		mlp2: mlp2,
+		uProfileDim:   uProfileDim,
+		uBehaviorSize: uBehaviorSize,
+		uBehaviorDim:  uBehaviorDim,
+		iFeatureDim:   iFeatureDim,
+		cFeatureDim:   cFeatureDim,
+		g:             g,
+		mlp0:          mlp0,
+		mlp1:          mlp1,
+		mlp2:          mlp2,
 	}
 
 	return
@@ -95,6 +118,12 @@ func NewSimpleMLP(
 	mlp1 := G.NewMatrix(g, G.Float64, G.WithShape(mlp0_1, mlp1_2), G.WithName("mlp1"), G.WithInit(G.Gaussian(0, 1)))
 	mlp2 := G.NewMatrix(g, G.Float64, G.WithShape(mlp1_2, 1), G.WithName("mlp2"), G.WithInit(G.Gaussian(0, 1)))
 	return &SimpleMLP{
+		uProfileDim:   uProfileDim,
+		uBehaviorSize: uBehaviorSize,
+		uBehaviorDim:  uBehaviorDim,
+		iFeatureDim:   iFeatureDim,
+		cFeatureDim:   cFeatureDim,
+
 		g:    g,
 		d0:   0.01,
 		d1:   0.01,
@@ -118,17 +147,22 @@ func (mlp *SimpleMLP) learnable() G.Nodes {
 
 func (mlp *SimpleMLP) Fwd(xUserProfile, ubMatrix, xItemFeature, xCtxFeature *G.Node, batchSize, uBehaviorSize, uBehaviorDim int) (err error) {
 	// user behaviors
-	ubMatrix = G.Must(G.Reshape(ubMatrix, tensor.Shape{batchSize, uBehaviorSize * uBehaviorDim}))
+	xUserBehaviors := G.Must(G.Reshape(ubMatrix, tensor.Shape{batchSize, uBehaviorSize * uBehaviorDim}))
 	// item feature
 	// context feature
 	// concat
-	x := G.Must(G.Concat(1, xUserProfile, ubMatrix, xItemFeature, xCtxFeature))
+	x := G.Must(G.Concat(1, xUserProfile, xUserBehaviors, xItemFeature, xCtxFeature))
 	// mlp
 	mlp0Out := G.Must(G.LeakyRelu(G.Must(G.Mul(x, mlp.mlp0)), 0.1))
 	mlp0Out = G.Must(G.Dropout(mlp0Out, mlp.d0))
 	mlp1Out := G.Must(G.LeakyRelu(G.Must(G.Mul(mlp0Out, mlp.mlp1)), 0.1))
 	mlp1Out = G.Must(G.Dropout(mlp1Out, mlp.d1))
+
 	mlp.out = G.Must(G.Sigmoid(G.Must(G.Mul(mlp1Out, mlp.mlp2))))
+	mlp.xUserProfile = xUserProfile
+	mlp.xItemFeature = xItemFeature
+	mlp.xCtxFeature = xCtxFeature
+	mlp.xUbMatrix = ubMatrix
 
 	return
 }
