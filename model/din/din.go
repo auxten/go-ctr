@@ -7,10 +7,11 @@ import (
 	"math/rand"
 	_ "net/http/pprof"
 
+	"github.com/auxten/edgeRec/nn/metrics"
 	rcmd "github.com/auxten/edgeRec/recommend"
-	"github.com/auxten/edgeRec/utils"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+	"gonum.org/v1/gonum/mat"
 	G "gorgonia.org/gorgonia"
 	"gorgonia.org/tensor"
 
@@ -112,6 +113,7 @@ func NewDinNetFromJson(data []byte) (din *DinNet, err error) {
 		uBehaviorDim  = m.UBehaviorDim
 		iFeatureDim   = m.IFeatureDim
 		cFeatureDim   = m.CFeatureDim
+		att0_0        = uBehaviorDim + iFeatureDim + uBehaviorSize*uBehaviorDim*iFeatureDim
 	)
 
 	// attention layer
@@ -121,23 +123,38 @@ func NewDinNetFromJson(data []byte) (din *DinNet, err error) {
 		att0[i] = G.NewMatrix(
 			g,
 			dt,
-			G.WithShape(uBehaviorDim+iFeatureDim+uBehaviorSize*uBehaviorDim*iFeatureDim, att0_1),
-			G.WithValue(m.Att0[i]),
+			G.WithShape(att0_0, att0_1),
+			G.WithValue(tensor.New(tensor.WithShape(att0_0, att0_1), tensor.WithBacking(m.Att0[i]))),
 			G.WithName(fmt.Sprintf("att0-%d", i)),
 		)
 		att1[i] = G.NewMatrix(
 			g,
 			dt,
 			G.WithShape(att0_1, 1),
-			G.WithValue(m.Att1[i]),
+			G.WithValue(tensor.New(tensor.WithShape(att0_1, 1), tensor.WithBacking(m.Att1[i]))),
 			G.WithName(fmt.Sprintf("att1-%d", i)),
 		)
 	}
-	mlp0 := G.NewMatrix(g, dt, G.WithShape(uProfileDim+uBehaviorDim+iFeatureDim+cFeatureDim, mlp0_1), G.WithName("mlp0"), G.WithValue(m.Mlp0))
+	mlp0 := G.NewMatrix(g, dt,
+		G.WithShape(uProfileDim+uBehaviorDim+iFeatureDim+cFeatureDim, mlp0_1),
+		G.WithName("mlp0"),
+		G.WithValue(tensor.New(
+			tensor.WithShape(uProfileDim+uBehaviorDim+iFeatureDim+cFeatureDim, mlp0_1),
+			tensor.WithBacking(m.Mlp0)),
+		),
+	)
 
-	mlp1 := G.NewMatrix(g, dt, G.WithShape(mlp0_1, mlp1_2), G.WithName("mlp1"), G.WithValue(m.Mlp1))
+	mlp1 := G.NewMatrix(g, dt,
+		G.WithShape(mlp0_1, mlp1_2),
+		G.WithName("mlp1"),
+		G.WithValue(tensor.New(tensor.WithShape(mlp0_1, mlp1_2), tensor.WithBacking(m.Mlp1))),
+	)
 
-	mlp2 := G.NewMatrix(g, dt, G.WithShape(mlp1_2, 1), G.WithName("mlp2"), G.WithValue(m.Mlp2))
+	mlp2 := G.NewMatrix(g, dt,
+		G.WithShape(mlp1_2, 1),
+		G.WithName("mlp2"),
+		G.WithValue(tensor.New(tensor.WithShape(mlp1_2, 1), tensor.WithBacking(m.Mlp2))),
+	)
 
 	din = &DinNet{
 		uProfileDim:   m.UProfileDim,
@@ -565,9 +582,16 @@ func accuracy(prediction, y []float64) float64 {
 }
 
 func rocauc(pred, y []float64) float64 {
-	boolY := make([]bool, len(y))
+	boolY := make([]float64, len(y))
 	for i := 0; i < len(y); i++ {
-		boolY[i] = y[i] == 1.0
+		if y[i] > 0.5 {
+			boolY[i] = 1.0
+		} else {
+			boolY[i] = 0.0
+		}
 	}
-	return utils.RocAuc(boolY, pred)
+	yTrue := mat.NewDense(len(y), 1, boolY)
+	yScore := mat.NewDense(len(pred), 1, pred)
+
+	return metrics.ROCAUCScore(yTrue, yScore, "", nil)
 }

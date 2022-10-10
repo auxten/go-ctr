@@ -15,16 +15,20 @@ func TestDin(t *testing.T) {
 	log.SetLevel(log.DebugLevel)
 	rand.Seed(42)
 	var (
-		batchSize     = 200
+		batchSize     = 20
 		uProfileDim   = 5
 		uBehaviorSize = 3
 		uBehaviorDim  = 7
 		iFeatureDim   = 7
 		cFeatureDim   = 5
 
-		numExamples = 100000
+		numExamples = 10000
 		epochs      = 20
-		sampleInfo  = &rcmd.SampleInfo{
+
+		testSamples   = 10
+		testBatchSize = 2
+
+		sampleInfo = &rcmd.SampleInfo{
 			UserProfileRange:  [2]int{0, uProfileDim},
 			UserBehaviorRange: [2]int{uProfileDim, uProfileDim + uBehaviorSize*uBehaviorDim},
 			ItemFeatureRange:  [2]int{uProfileDim + uBehaviorSize*uBehaviorDim, uProfileDim + uBehaviorSize*uBehaviorDim + iFeatureDim},
@@ -81,6 +85,28 @@ func TestDin(t *testing.T) {
 		So(err, ShouldBeNil)
 	})
 
+	var dinPredict *DinNet
+	Convey("Din model marshal and new from json", t, func() {
+		dinJson, err := dinModel.Marshal()
+		So(err, ShouldBeNil)
+		//log.Debugf("dinJson: %s", dinJson)
+		dinPredict, err = NewDinNetFromJson(dinJson)
+		So(err, ShouldBeNil)
+	})
+
+	Convey("Din predict", t, func() {
+		err := InitForwardOnlyVm(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim, testBatchSize, dinPredict)
+		So(err, ShouldBeNil)
+		predictions, err := Predict(dinPredict, testSamples, testBatchSize, sampleInfo, inputs)
+		So(err, ShouldBeNil)
+		So(predictions, ShouldNotBeNil)
+		So(predictions, ShouldHaveLength, testSamples)
+		log.Debugf("predictions: %+v", predictions)
+		auc := rocauc(predictions, labels.Data().([]float64)[:testSamples])
+		log.Debugf("auc: %f", auc)
+		So(auc, ShouldBeGreaterThan, 0.5)
+	})
+
 	mlpModel := NewSimpleMLP(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim)
 	Convey("Simple MLP", t, func() {
 		err := Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim,
@@ -90,5 +116,27 @@ func TestDin(t *testing.T) {
 			mlpModel,
 		)
 		So(err, ShouldBeNil)
+	})
+
+	var mlpPredict *SimpleMLP
+	Convey("Simple MLP marshal and new from json", t, func() {
+		mlpJson, err := mlpModel.Marshal()
+		So(err, ShouldBeNil)
+		//log.Debugf("mlpJson: %s", mlpJson)
+		mlpPredict, err = NewSimpleMLPFromJson(mlpJson)
+		So(err, ShouldBeNil)
+	})
+
+	Convey("Simple MLP predict", t, func() {
+		err := InitForwardOnlyVm(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim, testBatchSize, mlpPredict)
+		So(err, ShouldBeNil)
+		predictions, err := Predict(mlpPredict, testSamples, testBatchSize, sampleInfo, inputs)
+		So(err, ShouldBeNil)
+		So(predictions, ShouldNotBeNil)
+		So(predictions, ShouldHaveLength, testSamples)
+		log.Debugf("predictions: %+v", predictions)
+		auc := rocauc(predictions, labels.Data().([]float64)[:testSamples])
+		log.Debugf("auc: %f", auc)
+		So(auc, ShouldBeGreaterThan, 0.5)
 	})
 }
