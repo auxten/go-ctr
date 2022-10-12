@@ -11,7 +11,7 @@ import (
 	"gorgonia.org/tensor"
 )
 
-func TestDin(t *testing.T) {
+func TestMultiModel(t *testing.T) {
 	log.SetLevel(log.DebugLevel)
 	rand.Seed(42)
 	var (
