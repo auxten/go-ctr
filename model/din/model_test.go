@@ -15,18 +15,18 @@ func TestMultiModel(t *testing.T) {
 	log.SetLevel(log.DebugLevel)
 	rand.Seed(42)
 	var (
-		batchSize     = 20
+		batchSize     = 200
 		uProfileDim   = 5
 		uBehaviorSize = 3
 		uBehaviorDim  = 7
 		iFeatureDim   = 7
 		cFeatureDim   = 5
 
-		numExamples = 10000
+		numExamples = 100000
 		epochs      = 20
 
-		testSamples   = 10
-		testBatchSize = 2
+		testSamples   = 100
+		testBatchSize = 20
 
 		sampleInfo = &rcmd.SampleInfo{
 			UserProfileRange:  [2]int{0, uProfileDim},
@@ -72,7 +72,7 @@ func TestMultiModel(t *testing.T) {
 	}
 
 	labels := tensor.New(tensor.WithShape(numExamples, 1), tensor.WithBacking(labelSlice))
-	log.Debugf("labels: %+v", labels.Data())
+	//log.Debugf("labels: %+v", labels.Data())
 
 	dinModel := NewDinNet(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim)
 	Convey("Din model", t, func() {
