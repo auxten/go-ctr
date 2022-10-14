@@ -62,8 +62,38 @@ type UserFeaturer interface {
 	GetUserFeature(context.Context, int) (Tensor, error)
 }
 
+//UserBehavior interface is used to get user behavior feature.
+// typically, it is user's clicked/bought/liked item id list ordered by time asc.
+// During training, you should limit the seq to avoid time travel,
+//	maxPk or maxTs could be used here:
+//	 - maxPk is the max primary key of user behavior table.
+//	 - maxTs is the max timestamp of user behavior table.
+//	 - maxLen is the max length of user behavior seq, if total len is
+// 		greater than maxLen, the seq will be truncated from the tail.
+//  	which is latest maxLen items.
+// specially, -1 means no limit.
+//During prediction, you should use the latest user behavior seq.
+type UserBehavior interface {
+	GetUserBehavior(ctx context.Context, userId int,
+		maxLen int, maxPk int, maxTs int) (itemSeq []int, err error)
+}
+
 type ItemFeaturer interface {
 	GetItemFeature(context.Context, int) (Tensor, error)
+}
+
+// ItemEmbedding is an interface used to generate item embedding with item2vec model
+// by just providing a behavior based item sequence.
+// Example: user liked items sequence, user bought items sequence, user viewed items sequence
+type ItemEmbedding interface {
+	ItemSeqGenerator(context.Context) (<-chan string, error)
+}
+
+type SampleInfo struct {
+	UserProfileRange  [2]int // [start, end)
+	UserBehaviorRange [2]int // [start, end)
+	ItemFeatureRange  [2]int // [start, end)
+	CtxFeatureRange   [2]int // [start, end)
 }
 
 type UserItemOverview struct {
@@ -93,13 +123,13 @@ type DashboardOverviewResult struct {
 }
 
 type FeatureOverview interface {
-	// offset and size use for paging query
+	// GetUsersFeatureOverview returns offset and size used for paging query
 	GetUsersFeatureOverview(ctx context.Context, offset, size int, opts map[string][]string) (UserItemOverviewResult, error)
 
-	// offset and size use for paging query
+	// GetItemsFeatureOverview returns offset and size used for paging query
 	GetItemsFeatureOverview(ctx context.Context, offset, size int, opts map[string][]string) (ItemOverviewResult, error)
 
-	// GetDashboardOverview
+	// GetDashboardOverview returns dashboard overview, see DashboardOverviewResult
 	GetDashboardOverview(ctx context.Context) (DashboardOverviewResult, error)
 }
 
@@ -109,13 +139,6 @@ type PreRanker interface {
 
 type PreTrainer interface {
 	PreTrain(context.Context) error
-}
-
-// ItemEmbedding is an interface used to generate item embedding with item2vec model
-// by just providing a behavior based item sequence.
-// Example: user liked items sequence, user bought items sequence, user viewed items sequence
-type ItemEmbedding interface {
-	ItemSeqGenerator(context.Context) (<-chan string, error)
 }
 
 type ItemScore struct {
