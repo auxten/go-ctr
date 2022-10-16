@@ -265,6 +265,43 @@ func (recSys *RecSysImpl) SampleGenerator(_ context.Context) (ret <-chan rcmd.Sa
 	return
 }
 
+func (recSys *RecSysImpl) GetUserBehavior(ctx context.Context, userId int,
+	maxLen int64, maxPk int64, maxTs int64) (itemSeq []int, err error) {
+	var (
+		rows      *sql.Rows
+		tableName string
+	)
+	// get stage value from ctx
+	stage := ctx.Value(rcmd.StageKey).(rcmd.Stage)
+	switch stage {
+	case rcmd.TrainStage:
+		tableName = "ratings_train"
+	case rcmd.PredictStage:
+		tableName = "ratings_test"
+	default:
+		panic("unknown stage")
+	}
+
+	rows, err = db.Query(`select movieId from `+tableName+
+		` where userId = ? and timestamp < ? order by timestamp desc limit ?`,
+		userId, maxTs, maxLen)
+	if err != nil {
+		log.Errorf("failed to query ratings: %v", err)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var movieId int
+		if err = rows.Scan(&movieId); err != nil {
+			log.Errorf("failed to scan movieId: %v", err)
+			return
+		}
+		itemSeq = append(itemSeq, movieId)
+	}
+	
+	return
+}
+
 func (recSys *RecSysImpl) PreTrain(ctx context.Context) (err error) {
 	if err = initDb(recSys.DataPath); err != nil {
 		return
