@@ -229,7 +229,7 @@ func (recSys *RecSysImpl) SampleGenerator(_ context.Context) (ret <-chan rcmd.Sa
 		}()
 
 		rows, err = db.Query(
-			"SELECT userId, movieId, rating FROM ratings_train ORDER BY timestamp, userId ASC LIMIT ?", recSys.SampleCnt)
+			"SELECT userId, movieId, rating, timestamp FROM ratings_train ORDER BY timestamp, userId ASC LIMIT ?", recSys.SampleCnt)
 		if err != nil {
 			log.Errorf("failed to query ratings: %v", err)
 			wg.Done()
@@ -242,8 +242,9 @@ func (recSys *RecSysImpl) SampleGenerator(_ context.Context) (ret <-chan rcmd.Sa
 			var (
 				userId, movieId int
 				rating, label   float64
+				timestamp       int64
 			)
-			if err = rows.Scan(&userId, &movieId, &rating); err != nil {
+			if err = rows.Scan(&userId, &movieId, &rating, &timestamp); err != nil {
 				log.Errorf("failed to scan ratings: %v", err)
 				return
 			}
@@ -251,9 +252,10 @@ func (recSys *RecSysImpl) SampleGenerator(_ context.Context) (ret <-chan rcmd.Sa
 			// label = rating / 5.0
 
 			sampleCh <- rcmd.Sample{
-				UserId: userId,
-				ItemId: movieId,
-				Label:  label,
+				UserId:    userId,
+				ItemId:    movieId,
+				Label:     label,
+				Timestamp: timestamp,
 			}
 		}
 	}()
