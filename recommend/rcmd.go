@@ -59,7 +59,11 @@ type RecSys interface {
 type Predictor interface {
 	UserFeaturer
 	ItemFeaturer
-	base.Predicter
+	PredictAbstract
+}
+
+type PredictAbstract interface {
+	Predict(X mat.Matrix, Y mat.Mutable) *mat.Dense
 }
 
 type Trainer interface {
@@ -203,13 +207,13 @@ func Train(ctx context.Context, recSys RecSys, mlp base.Fiter) (model Predictor,
 	type modelImpl struct {
 		UserFeaturer
 		ItemFeaturer
-		base.Predicter
+		PredictAbstract
 		FeatureOverview
 	}
 	model = &modelImpl{
 		UserFeaturer:    recSys,
 		ItemFeaturer:    recSys,
-		Predicter:       mlp.(base.Predicter),
+		PredictAbstract: mlp.(PredictAbstract),
 		FeatureOverview: recSys,
 	}
 
