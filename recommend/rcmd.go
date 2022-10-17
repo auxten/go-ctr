@@ -203,6 +203,8 @@ func Train(ctx context.Context, recSys RecSys, mlp base.Fiter) (model Predictor,
 
 	// start training
 	log.Infof("\nstart training with %d samples\n", sampleLen)
+
+	//TODO: pass trainSample to Fit??
 	mlp.Fit(sampleDense, yClass)
 	type modelImpl struct {
 		UserFeaturer

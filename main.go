@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"flag"
+
 	"github.com/auxten/edgeRec/example/movielens"
 	nn "github.com/auxten/edgeRec/nn/neural_network"
 	rcmd "github.com/auxten/edgeRec/recommend"
@@ -25,9 +26,9 @@ func main() {
 		log.Println("Commit: ", Commit)
 		return
 	}
-	
+
 	var (
-		recSys = &movielens.RecSysImpl{
+		recSys = &movielens.MovielensRec{
 			DataPath:  "movielens.db",
 			SampleCnt: 80000,
 		}
