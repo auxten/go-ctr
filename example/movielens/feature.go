@@ -11,7 +11,6 @@ import (
 	"sync"
 
 	"github.com/auxten/edgeRec/feature"
-	"github.com/auxten/edgeRec/nn/base"
 	rcmd "github.com/auxten/edgeRec/recommend"
 	"github.com/auxten/edgeRec/utils"
 	_ "github.com/mattn/go-sqlite3"
@@ -35,14 +34,13 @@ func initDb(dbPath string) (err error) {
 	return
 }
 
-type RecSysImpl struct {
+type MovielensRec struct {
 	DataPath   string
 	SampleCnt  int
-	Neural     base.Predicter
 	mRatingMap map[int][2]float64
 }
 
-func (recSys *RecSysImpl) ItemSeqGenerator(ctx context.Context) (ret <-chan string, err error) {
+func (recSys *MovielensRec) ItemSeqGenerator(ctx context.Context) (ret <-chan string, err error) {
 	var (
 		wg sync.WaitGroup
 	)
@@ -82,7 +80,7 @@ func (recSys *RecSysImpl) ItemSeqGenerator(ctx context.Context) (ret <-chan stri
 	return
 }
 
-func (recSys *RecSysImpl) GetItemFeature(ctx context.Context, itemId int) (tensor rcmd.Tensor, err error) {
+func (recSys *MovielensRec) GetItemFeature(ctx context.Context, itemId int) (tensor rcmd.Tensor, err error) {
 	// get movie avg rating and rating count
 	var (
 		rows *sql.Rows
@@ -141,7 +139,7 @@ func (recSys *RecSysImpl) GetItemFeature(ctx context.Context, itemId int) (tenso
 	}
 }
 
-func (recSys *RecSysImpl) GetUserFeature(ctx context.Context, userId int) (tensor rcmd.Tensor, err error) {
+func (recSys *MovielensRec) GetUserFeature(ctx context.Context, userId int) (tensor rcmd.Tensor, err error) {
 	var (
 		tableName        string
 		rows, rows2      *sql.Rows
@@ -212,7 +210,7 @@ func genreFeature(genre string) (tensor rcmd.Tensor) {
 	return feature.HashOneHot([]byte(genre), 10)
 }
 
-func (recSys *RecSysImpl) SampleGenerator(_ context.Context) (ret <-chan rcmd.Sample, err error) {
+func (recSys *MovielensRec) SampleGenerator(_ context.Context) (ret <-chan rcmd.Sample, err error) {
 	sampleCh := make(chan rcmd.Sample, 10000)
 	var (
 		wg sync.WaitGroup
@@ -265,7 +263,7 @@ func (recSys *RecSysImpl) SampleGenerator(_ context.Context) (ret <-chan rcmd.Sa
 	return
 }
 
-func (recSys *RecSysImpl) GetUserBehavior(ctx context.Context, userId int,
+func (recSys *MovielensRec) GetUserBehavior(ctx context.Context, userId int,
 	maxLen int64, maxPk int64, maxTs int64) (itemSeq []int, err error) {
 	var (
 		rows      *sql.Rows
@@ -298,11 +296,11 @@ func (recSys *RecSysImpl) GetUserBehavior(ctx context.Context, userId int,
 		}
 		itemSeq = append(itemSeq, movieId)
 	}
-	
+
 	return
 }
 
-func (recSys *RecSysImpl) PreTrain(ctx context.Context) (err error) {
+func (recSys *MovielensRec) PreTrain(ctx context.Context) (err error) {
 	if err = initDb(recSys.DataPath); err != nil {
 		return
 	}
@@ -343,7 +341,7 @@ func getRows(ctx context.Context, offset, size int, table string) (*sql.Rows, er
 	return db.QueryContext(ctx, sql)
 }
 
-func (recSys *RecSysImpl) GetUsersFeatureOverview(ctx context.Context, offset, size int, _ map[string][]string) (res rcmd.UserItemOverviewResult, err error) {
+func (recSys *MovielensRec) GetUsersFeatureOverview(ctx context.Context, offset, size int, _ map[string][]string) (res rcmd.UserItemOverviewResult, err error) {
 	var rows *sql.Rows
 	rows, err = getRows(ctx, offset, size, "user")
 	if err != nil {
@@ -367,7 +365,7 @@ func (recSys *RecSysImpl) GetUsersFeatureOverview(ctx context.Context, offset, s
 	return res, nil
 }
 
-func (recSys *RecSysImpl) GetItemsFeatureOverview(ctx context.Context, offset, size int, _ map[string][]string) (res rcmd.ItemOverviewResult, err error) {
+func (recSys *MovielensRec) GetItemsFeatureOverview(ctx context.Context, offset, size int, _ map[string][]string) (res rcmd.ItemOverviewResult, err error) {
 	var rows *sql.Rows
 	rows, err = getRows(ctx, offset, size, "movies")
 	if err != nil {
@@ -395,7 +393,7 @@ func (recSys *RecSysImpl) GetItemsFeatureOverview(ctx context.Context, offset, s
 	return
 }
 
-func (recSys *RecSysImpl) GetDashboardOverview(ctx context.Context) (res rcmd.DashboardOverviewResult, err error) {
+func (recSys *MovielensRec) GetDashboardOverview(ctx context.Context) (res rcmd.DashboardOverviewResult, err error) {
 	for _, cur := range []struct {
 		table   string
 		pointer *int

@@ -18,7 +18,7 @@ func TestFeatureEngineer(t *testing.T) {
 	rcmd.DebugItemId = 588
 
 	var (
-		recSys = &RecSysImpl{
+		recSys = &MovielensRec{
 			DataPath:  "movielens.db",
 			SampleCnt: 79948,
 		}
