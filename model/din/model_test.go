@@ -76,7 +76,7 @@ func TestMultiModel(t *testing.T) {
 
 	dinModel := NewDinNet(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim)
 	Convey("Din model", t, func() {
-		err := Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim,
+		err := Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim,
 			numExamples, batchSize, epochs,
 			sampleInfo,
 			inputs, labels,
@@ -95,7 +95,7 @@ func TestMultiModel(t *testing.T) {
 	})
 
 	Convey("Din predict", t, func() {
-		err := InitForwardOnlyVm(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim, testBatchSize, dinPredict)
+		err := InitForwardOnlyVm(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim, testBatchSize, dinPredict)
 		So(err, ShouldBeNil)
 		predictions, err := Predict(dinPredict, testSamples, testBatchSize, sampleInfo, inputs)
 		So(err, ShouldBeNil)
@@ -109,7 +109,7 @@ func TestMultiModel(t *testing.T) {
 
 	mlpModel := NewSimpleMLP(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim)
 	Convey("Simple MLP", t, func() {
-		err := Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim,
+		err := Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim,
 			numExamples, batchSize, epochs,
 			sampleInfo,
 			inputs, labels,
@@ -128,7 +128,7 @@ func TestMultiModel(t *testing.T) {
 	})
 
 	Convey("Simple MLP predict", t, func() {
-		err := InitForwardOnlyVm(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim, testBatchSize, mlpPredict)
+		err := InitForwardOnlyVm(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim, testBatchSize, mlpPredict)
 		So(err, ShouldBeNil)
 		predictions, err := Predict(mlpPredict, testSamples, testBatchSize, sampleInfo, inputs)
 		So(err, ShouldBeNil)

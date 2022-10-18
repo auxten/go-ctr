@@ -33,7 +33,7 @@ type Model interface {
 	SetVM(vm G.VM)
 }
 
-func Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim int,
+func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim int,
 	numExamples, batchSize, epochs int,
 	si *rcmd.SampleInfo,
 	inputs, targets tensor.Tensor,
@@ -179,7 +179,7 @@ func Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim in
 	return
 }
 
-func InitForwardOnlyVm(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim int,
+func InitForwardOnlyVm(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim int,
 	batchSize int,
 	m Model,
 ) (err error) {

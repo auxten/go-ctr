@@ -19,16 +19,17 @@ func TestDinOnMovielens(t *testing.T) {
 			SampleCnt: 1000,
 		}
 		model rcmd.Predictor
+		err   error
 	)
 
 	Convey("Train din model", t, func() {
 		dinModel := &dinImpl{
 			predBatchSize: 100,
 			batchSize:     100,
-			epochs:        20,
+			epochs:        1,
 		}
 		trainCtx := context.Background()
-		model, err := rcmd.Train(trainCtx, movielens, dinModel)
+		model, err = rcmd.Train(trainCtx, movielens, dinModel)
 		So(err, ShouldBeNil)
 		So(model, ShouldNotBeNil)
 	})

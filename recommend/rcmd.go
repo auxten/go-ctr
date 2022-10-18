@@ -244,6 +244,7 @@ func Rank(ctx context.Context, recSys Predictor, userId int, itemIds []int) (ite
 			log.Infof("get item feature failed: %v", err)
 			return
 		}
+		//TODO: add ub and item embedding
 		xSlice := utils.ConcatSlice(userFeature, itemFeature)
 		x := mat.NewDense(1, len(xSlice), xSlice)
 		y := mat.NewDense(1, 1, nil)
@@ -287,6 +288,7 @@ func BatchPredict(ctx context.Context, recSys Predictor, userAndItems [][2]int) 
 			log.Infof("get item feature failed: %v", err)
 			continue
 		}
+		//TODO: add ub and item embedding
 		xSlice := utils.ConcatSlice(userFeature, itemFeature)
 		if i == 0 {
 			x = mat.NewDense(len(userAndItems), len(xSlice), nil)
