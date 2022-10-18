@@ -25,19 +25,20 @@ func TestFeatureEngineer(t *testing.T) {
 		model rcmd.Predictor
 		err   error
 	)
-	fiter := nn.NewMLPClassifier(
+
+	fitter := nn.NewMLPClassifier(
 		[]int{100},
 		"relu", "adam", 1e-5,
 	)
-	fiter.Verbose = true
-	fiter.MaxIter = 10
-	fiter.LearningRate = "adaptive"
-	fiter.LearningRateInit = .0025
+	fitter.Verbose = true
+	fitter.MaxIter = 10
+	fitter.LearningRate = "adaptive"
+	fitter.LearningRateInit = .0025
 
 	trainCtx := context.Background()
 	log.SetLevel(log.DebugLevel)
 	Convey("feature engineering", t, func() {
-		model, err = rcmd.Train(trainCtx, recSys, fiter)
+		model, err = rcmd.Train(trainCtx, recSys, &fitWrap{model: fitter})
 		So(err, ShouldBeNil)
 	})
 

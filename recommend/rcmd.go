@@ -10,7 +10,6 @@ import (
 	"github.com/auxten/edgeRec/feature/embedding"
 	"github.com/auxten/edgeRec/feature/embedding/model"
 	"github.com/auxten/edgeRec/feature/embedding/model/word2vec"
-	"github.com/auxten/edgeRec/nn/base"
 	"github.com/auxten/edgeRec/ps"
 	"github.com/auxten/edgeRec/utils"
 	"github.com/karlseguin/ccache/v2"
@@ -68,6 +67,10 @@ type PredictAbstract interface {
 
 type Trainer interface {
 	SampleGenerator(context.Context) (<-chan Sample, error)
+}
+
+type Fitter interface {
+	Fit(sample *TrainSample) (PredictAbstract, error)
 }
 
 type UserFeaturer interface {
@@ -165,7 +168,7 @@ type Sample struct {
 	Timestamp int64   `json:"timestamp"`
 }
 
-func Train(ctx context.Context, recSys RecSys, mlp base.Fiter) (model Predictor, err error) {
+func Train(ctx context.Context, recSys RecSys, mlp Fitter) (model Predictor, err error) {
 	rand.Seed(0)
 	ctx = context.WithValue(ctx, StageKey, TrainStage)
 
@@ -192,20 +195,15 @@ func Train(ctx context.Context, recSys RecSys, mlp base.Fiter) (model Predictor,
 
 	trainSample, err := GetSample(recSys, ctx)
 	sampleLen := len(trainSample.Data)
-	sampleDense := mat.NewDense(sampleLen, len(trainSample.Data[0].Input), nil)
-	for i, sample := range trainSample.Data {
-		sampleDense.SetRow(i, sample.Input)
-	}
-	yClass := mat.NewDense(sampleLen, 1, nil)
-	for i, sample := range trainSample.Data {
-		yClass.Set(i, 0, sample.Response[0])
-	}
 
 	// start training
 	log.Infof("\nstart training with %d samples\n", sampleLen)
 
-	//TODO: pass trainSample to Fit??
-	mlp.Fit(sampleDense, yClass)
+	pred, err := mlp.Fit(trainSample)
+	if err != nil {
+		log.Errorf("fit error: %v", err)
+		return
+	}
 	type modelImpl struct {
 		UserFeaturer
 		ItemFeaturer
@@ -215,7 +213,7 @@ func Train(ctx context.Context, recSys RecSys, mlp base.Fiter) (model Predictor,
 	model = &modelImpl{
 		UserFeaturer:    recSys,
 		ItemFeaturer:    recSys,
-		PredictAbstract: mlp.(PredictAbstract),
+		PredictAbstract: pred,
 		FeatureOverview: recSys,
 	}
 
