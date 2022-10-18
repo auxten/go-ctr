@@ -1,8 +1,9 @@
 package movielens
 
 import (
+	"fmt"
+
 	"github.com/auxten/edgeRec/model/din"
-	"github.com/auxten/edgeRec/nn/base"
 	rcmd "github.com/auxten/edgeRec/recommend"
 	log "github.com/sirupsen/logrus"
 	"gonum.org/v1/gonum/mat"
@@ -40,7 +41,24 @@ func (d *dinImpl) Predict(X mat.Matrix, Y mat.Mutable) *mat.Dense {
 	return yDense
 }
 
-func (d *dinImpl) Fit(X, Y mat.Matrix) base.Fiter {
+func (d *dinImpl) Fit(trainSample *rcmd.TrainSample) (pred rcmd.PredictAbstract, err error) {
+	d.uProfileDim = trainSample.Info.UserProfileRange[1] - trainSample.Info.UserProfileRange[0]
+	d.uBehaviorSize = rcmd.UserBehaviorLen
+	d.uBehaviorDim = rcmd.ItemEmbDim
+	d.iFeatureDim = rcmd.ItemEmbDim
+	d.cFeatureDim = trainSample.Info.CtxFeatureRange[1] - trainSample.Info.CtxFeatureRange[0]
+	d.sampleInfo = &trainSample.Info
+
+	sampleLen := len(trainSample.Data)
+	X := mat.NewDense(sampleLen, len(trainSample.Data[0].Input), nil)
+	for i, sample := range trainSample.Data {
+		X.SetRow(i, sample.Input)
+	}
+	Y := mat.NewDense(sampleLen, 1, nil)
+	for i, sample := range trainSample.Data {
+		Y.Set(i, 0, sample.Response[0])
+	}
+
 	d.learner = din.NewDinNet(d.uProfileDim, d.uBehaviorSize, d.uBehaviorDim, d.iFeatureDim, d.cFeatureDim)
 	var (
 		inputs, labels tensor.Tensor
@@ -48,13 +66,13 @@ func (d *dinImpl) Fit(X, Y mat.Matrix) base.Fiter {
 		numLabels, _   = Y.Dims()
 	)
 	if numExamples != numLabels {
-		log.Errorf("X and Y should have same number of rows")
-		return nil
+		err = fmt.Errorf("number of examples and labels do not match")
+		return
 	}
 
-	inputs = tensor.New(tensor.WithShape(X.Dims()), tensor.WithBacking(X.(*mat.Dense).RawMatrix().Data))
-	labels = tensor.New(tensor.WithShape(Y.Dims()), tensor.WithBacking(Y.(*mat.Dense).RawMatrix().Data))
-	err := din.Train(d.uProfileDim, d.uBehaviorSize, d.uBehaviorDim, d.iFeatureDim, d.cFeatureDim,
+	inputs = tensor.New(tensor.WithShape(X.Dims()), tensor.WithBacking(X.RawMatrix().Data))
+	labels = tensor.New(tensor.WithShape(Y.Dims()), tensor.WithBacking(Y.RawMatrix().Data))
+	err = din.Train(d.uProfileDim, d.uBehaviorSize, d.uBehaviorDim, d.iFeatureDim, d.cFeatureDim,
 		numExamples, d.batchSize, d.epochs,
 		d.sampleInfo,
 		inputs, labels,
@@ -62,24 +80,25 @@ func (d *dinImpl) Fit(X, Y mat.Matrix) base.Fiter {
 	)
 	if err != nil {
 		log.Errorf("train din model failed: %v", err)
-		return nil
+		return
 	}
 	dinJson, err := d.learner.Marshal()
 	if err != nil {
 		log.Errorf("marshal din model failed: %v", err)
-		return nil
+		return
 	}
-	predictor, err := din.NewDinNetFromJson(dinJson)
+	dinPred, err := din.NewDinNetFromJson(dinJson)
 	if err != nil {
 		log.Errorf("new din model from json failed: %v", err)
-		return nil
+		return
 	}
-	err = din.InitForwardOnlyVm(d.uProfileDim, d.uBehaviorSize, d.uBehaviorDim, d.iFeatureDim, d.cFeatureDim, d.predBatchSize, predictor)
+	err = din.InitForwardOnlyVm(d.uProfileDim, d.uBehaviorSize, d.uBehaviorDim, d.iFeatureDim, d.cFeatureDim,
+		d.predBatchSize, dinPred)
 	if err != nil {
 		log.Errorf("init forward only vm failed: %v", err)
-		return nil
+		return
 	}
-	d.pred = predictor
+	d.pred = dinPred
 
-	return d
+	return d, nil
 }

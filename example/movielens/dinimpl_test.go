@@ -14,25 +14,18 @@ import (
 func TestDinOnMovielens(t *testing.T) {
 	var (
 		movielens = &MovielensRec{
-			DataPath:  "movielens.db",
-			SampleCnt: 79948,
+			DataPath: "movielens.db",
+			//SampleCnt: 79948,
+			SampleCnt: 1000,
 		}
 		model rcmd.Predictor
 	)
 
 	Convey("Train din model", t, func() {
 		dinModel := &dinImpl{
-			uProfileDim:   0,
-			uBehaviorSize: 0,
-			uBehaviorDim:  0,
-			iFeatureDim:   0,
-			cFeatureDim:   0,
-			predBatchSize: 0,
-			batchSize:     0,
-			epochs:        0,
-			sampleInfo:    nil,
-			learner:       nil,
-			pred:          nil,
+			predBatchSize: 100,
+			batchSize:     100,
+			epochs:        20,
 		}
 		trainCtx := context.Background()
 		model, err := rcmd.Train(trainCtx, movielens, dinModel)
