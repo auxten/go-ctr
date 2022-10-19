@@ -347,7 +347,7 @@ func GetSample(recSys RecSys, ctx context.Context) (sample *TrainSample, err err
 			vec            []float64
 			uWidth, iWidth int
 		)
-		vec, uWidth, iWidth, err = GetSampleVector(ctx, userFeatureCache, itemFeatureCache, userBehaviorCache, recSys, s)
+		vec, uWidth, iWidth, err = GetSampleVector(ctx, userFeatureCache, itemFeatureCache, userBehaviorCache, recSys, &s)
 		if err != nil {
 			log.Errorf("get sample vector failed: %v", err)
 			continue
@@ -404,7 +404,7 @@ func GetSample(recSys RecSys, ctx context.Context) (sample *TrainSample, err err
 
 func GetSampleVector(ctx context.Context,
 	userFeatureCache *ccache.Cache, itemFeatureCache *ccache.Cache, userBehaviorCache *ccache.Cache,
-	recSys RecSys, s Sample,
+	recSys RecSys, s *Sample,
 ) (vec []float64, userFeatureWidth int, itemFeatureWidth int, err error) {
 	var (
 		zeroItemEmb       [ItemEmbDim]float64
