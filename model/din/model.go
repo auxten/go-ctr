@@ -94,7 +94,7 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 	m.SetVM(vm)
 
 	//solver := G.NewRMSPropSolver(G.WithBatchSize(float64(batchSize)))
-	solver := G.NewAdamSolver(G.WithLearnRate(0.001))
+	solver := G.NewAdamSolver(G.WithLearnRate(0.01), G.WithBatchSize(float64(batchSize)))
 	//defer func() {
 	//	vm.Close()
 	//	m.SetVM(nil)
