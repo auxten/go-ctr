@@ -20,7 +20,7 @@ func TestFeatureEngineer(t *testing.T) {
 	var (
 		recSys = &MovielensRec{
 			DataPath:  "movielens.db",
-			SampleCnt: 79948,
+			SampleCnt: 2000,
 		}
 		model rcmd.Predictor
 		err   error

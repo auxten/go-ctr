@@ -8,27 +8,33 @@ import (
 
 	"github.com/auxten/edgeRec/nn/metrics"
 	rcmd "github.com/auxten/edgeRec/recommend"
+	log "github.com/sirupsen/logrus"
 	. "github.com/smartystreets/goconvey/convey"
 	"gonum.org/v1/gonum/mat"
 )
 
 func TestSimpleMLPOnMovielens(t *testing.T) {
+	log.SetLevel(log.DebugLevel)
+	rand.Seed(42)
+
+	rcmd.DebugUserId = 429
+	//rcmd.DebugItemId = 588
+
 	var (
 		movielens = &MovielensRec{
 			DataPath: "movielens.db",
 			//SampleCnt: 79948,
-			SampleCnt: 2000,
+			SampleCnt: 20000,
 		}
 		model rcmd.Predictor
 		err   error
 	)
-	rand.Seed(42)
 
 	Convey("Train din model", t, func() {
 		mlpImpl := &mlpImpl{
 			predBatchSize: 100,
-			batchSize:     200,
-			epochs:        20,
+			batchSize:     20,
+			epochs:        200,
 		}
 		trainCtx := context.Background()
 		model, err = rcmd.Train(trainCtx, movielens, mlpImpl)
