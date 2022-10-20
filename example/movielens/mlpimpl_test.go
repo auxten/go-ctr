@@ -3,6 +3,7 @@ package movielens
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"testing"
 
 	"github.com/auxten/edgeRec/nn/metrics"
@@ -11,7 +12,7 @@ import (
 	"gonum.org/v1/gonum/mat"
 )
 
-func TestDinOnMovielens(t *testing.T) {
+func TestSimpleMLPOnMovielens(t *testing.T) {
 	var (
 		movielens = &MovielensRec{
 			DataPath: "movielens.db",
@@ -21,15 +22,16 @@ func TestDinOnMovielens(t *testing.T) {
 		model rcmd.Predictor
 		err   error
 	)
+	rand.Seed(42)
 
 	Convey("Train din model", t, func() {
-		dinModel := &dinImpl{
+		mlpImpl := &mlpImpl{
 			predBatchSize: 100,
 			batchSize:     200,
 			epochs:        20,
 		}
 		trainCtx := context.Background()
-		model, err = rcmd.Train(trainCtx, movielens, dinModel)
+		model, err = rcmd.Train(trainCtx, movielens, mlpImpl)
 		So(err, ShouldBeNil)
 		So(model, ShouldNotBeNil)
 	})
