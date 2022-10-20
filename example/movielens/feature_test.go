@@ -79,25 +79,26 @@ func TestFeatureEngineer(t *testing.T) {
 	Convey("test set ROC AUC", t, func() {
 		testCount := 20600
 		rows, err := db.Query(
-			"SELECT userId, movieId, rating FROM ratings_test ORDER BY timestamp, userId ASC LIMIT ?", testCount)
+			"SELECT userId, movieId, rating, timestamp FROM ratings_test ORDER BY timestamp, userId ASC LIMIT ?", testCount)
 		So(err, ShouldBeNil)
 		var (
-			userId       int
-			itemId       int
-			rating       float64
-			yTrue        = mat.NewDense(testCount, 1, nil)
-			userAndItems [][2]int
+			userId     int
+			itemId     int
+			rating     float64
+			timestamp  int64
+			yTrue      = mat.NewDense(testCount, 1, nil)
+			sampleKeys = make([]rcmd.Sample, 0, testCount)
 		)
 		for i := 0; rows.Next(); i++ {
-			err = rows.Scan(&userId, &itemId, &rating)
+			err = rows.Scan(&userId, &itemId, &rating, &timestamp)
 			if err != nil {
 				t.Errorf("scan error: %v", err)
 			}
 			yTrue.Set(i, 0, BinarizeLabel(rating))
-			userAndItems = append(userAndItems, [2]int{userId, itemId})
+			sampleKeys = append(sampleKeys, rcmd.Sample{userId, itemId, 0, timestamp})
 		}
 		batchPredictCtx := context.Background()
-		yPred, err := rcmd.BatchPredict(batchPredictCtx, model, userAndItems)
+		yPred, err := rcmd.BatchPredict(batchPredictCtx, model, sampleKeys)
 		So(err, ShouldBeNil)
 		rocAuc := metrics.ROCAUCScore(yTrue, yPred, "", nil)
 		rowCount, _ := yTrue.Dims()
