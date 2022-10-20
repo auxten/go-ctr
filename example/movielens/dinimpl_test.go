@@ -14,9 +14,9 @@ import (
 func TestDinOnMovielens(t *testing.T) {
 	var (
 		movielens = &MovielensRec{
-			DataPath: "movielens.db",
-			//SampleCnt: 79948,
-			SampleCnt: 1000,
+			DataPath:  "movielens.db",
+			SampleCnt: 79948,
+			//SampleCnt: 200,
 		}
 		model rcmd.Predictor
 		err   error
@@ -25,8 +25,8 @@ func TestDinOnMovielens(t *testing.T) {
 	Convey("Train din model", t, func() {
 		dinModel := &dinImpl{
 			predBatchSize: 100,
-			batchSize:     100,
-			epochs:        1,
+			batchSize:     200,
+			epochs:        20,
 		}
 		trainCtx := context.Background()
 		model, err = rcmd.Train(trainCtx, movielens, dinModel)
