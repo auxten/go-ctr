@@ -178,7 +178,11 @@ func (recSys *MovielensRec) GetUserFeature(ctx context.Context, userId int) (ten
 		}
 	}
 
-	genreList := strings.Split(genres, ",|")
+	// split genres with delimiter "|" and ","
+	genreList := strings.FieldsFunc(genres, func(r rune) bool {
+		return r == '|' || r == ','
+	})
+	//TODO: multi-hot with occurrence weight
 	top5Genres := utils.TopNOccurrences(genreList, 5)
 	for i, genre := range top5Genres {
 		copy(top5GenresTensor[i*10:], genreFeature(genre.Key))
@@ -281,7 +285,7 @@ func (recSys *MovielensRec) GetUserBehavior(ctx context.Context, userId int,
 	}
 
 	rows, err = db.Query(`select movieId from `+tableName+
-		` where userId = ? and timestamp < ? order by timestamp desc limit ?`,
+		` where userId = ? and timestamp <= ? order by timestamp desc limit ?`,
 		userId, maxTs, maxLen)
 	if err != nil {
 		log.Errorf("failed to query ratings: %v", err)
