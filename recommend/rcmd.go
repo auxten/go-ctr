@@ -297,17 +297,15 @@ func BatchPredict(ctx context.Context, recSys Predictor, sampleKeys []Sample) (y
 			return
 		}
 		x.SetRow(i, xSlice)
-		if (DebugItemId == 0 || DebugItemId == sKey.ItemId) &&
+		if DebugItemId == sKey.ItemId &&
 			(DebugUserId == 0 || DebugUserId == sKey.UserId) {
 			log.Infof("user %d: item %d: feature %v", sKey.UserId, sKey.ItemId, xSlice)
 			debugIds = append(debugIds, i)
 		}
 	}
 	recSys.Predict(x, y)
-	if DebugItemId != 0 || DebugUserId != 0 {
-		for _, i := range debugIds {
-			log.Infof("user %d: item %d: score %v", sampleKeys[i].UserId, sampleKeys[i].ItemId, y.At(i, 0))
-		}
+	for _, i := range debugIds {
+		log.Infof("user %d: item %d: score %v", sampleKeys[i].UserId, sampleKeys[i].ItemId, y.At(i, 0))
 	}
 	return
 }
@@ -317,7 +315,6 @@ func GetSample(recSys RecSys, ctx context.Context) (sample *TrainSample, err err
 		sampleWidth      int
 		userFeatureWidth int
 		itemFeatureWidth int
-		sampleInfo       = &SampleInfo{}
 	)
 	userFeatureCache = ccache.New(
 		ccache.Configure().MaxSize(userFeatureCacheSize).ItemsToPrune(userFeatureCacheSize / 100),
@@ -329,11 +326,11 @@ func GetSample(recSys RecSys, ctx context.Context) (sample *TrainSample, err err
 		ccache.Configure().MaxSize(userBehaviorCacheSize).ItemsToPrune(userBehaviorCacheSize / 100),
 	)
 
-	defer func() {
-		userFeatureCache.Clear()
-		itemFeatureCache.Clear()
-		userBehaviorCache.Clear()
-	}()
+	//defer func() {
+	//	userFeatureCache.Clear()
+	//	itemFeatureCache.Clear()
+	//	userBehaviorCache.Clear()
+	//}()
 
 	sampleGen, ok := recSys.(Trainer)
 	if !ok {
@@ -358,13 +355,13 @@ func GetSample(recSys RecSys, ctx context.Context) (sample *TrainSample, err err
 
 		if userFeatureWidth == 0 {
 			userFeatureWidth = uWidth
-			sampleInfo.UserProfileRange[0] = 0
-			sampleInfo.UserProfileRange[1] = userFeatureWidth
-			sampleInfo.UserBehaviorRange[0] = sampleInfo.UserProfileRange[1]
-			sampleInfo.UserBehaviorRange[1] = sampleInfo.UserProfileRange[1] + ItemEmbDim*UserBehaviorLen
+			sample.Info.UserProfileRange[0] = 0
+			sample.Info.UserProfileRange[1] = userFeatureWidth
+			sample.Info.UserBehaviorRange[0] = sample.Info.UserProfileRange[1]
+			sample.Info.UserBehaviorRange[1] = sample.Info.UserProfileRange[1] + ItemEmbDim*UserBehaviorLen
 			// item feature here is only embeddings
-			sampleInfo.ItemFeatureRange[0] = sampleInfo.UserBehaviorRange[1]
-			sampleInfo.ItemFeatureRange[1] = sampleInfo.UserBehaviorRange[1] + ItemEmbDim
+			sample.Info.ItemFeatureRange[0] = sample.Info.UserBehaviorRange[1]
+			sample.Info.ItemFeatureRange[1] = sample.Info.UserBehaviorRange[1] + ItemEmbDim
 		}
 		if uWidth != userFeatureWidth {
 			err = fmt.Errorf("user feature length mismatch: %v:%v",
@@ -375,8 +372,8 @@ func GetSample(recSys RecSys, ctx context.Context) (sample *TrainSample, err err
 		if itemFeatureWidth == 0 {
 			itemFeatureWidth = iWidth
 			// non embedding item feature is treated as ctx feature
-			sampleInfo.CtxFeatureRange[0] = sampleInfo.ItemFeatureRange[1]
-			sampleInfo.CtxFeatureRange[1] = sampleInfo.ItemFeatureRange[1] + itemFeatureWidth
+			sample.Info.CtxFeatureRange[0] = sample.Info.ItemFeatureRange[1]
+			sample.Info.CtxFeatureRange[1] = sample.Info.ItemFeatureRange[1] + itemFeatureWidth
 		}
 		if iWidth != itemFeatureWidth {
 			err = fmt.Errorf("item feature length mismatch: %v:%v",
