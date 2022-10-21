@@ -181,7 +181,7 @@ type Sample struct {
 }
 
 func Train(ctx context.Context, recSys RecSys, mlp Fitter) (model Predictor, err error) {
-	rand.Seed(0)
+	rand.Seed(42)
 	ctx = context.WithValue(ctx, StageKey, TrainStage)
 
 	if preTrain, ok := recSys.(PreTrainer); ok {

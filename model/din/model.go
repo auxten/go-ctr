@@ -84,7 +84,7 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 
 	vm := G.NewTapeMachine(g,
 		G.WithPrecompiled(prog, locMap),
-		G.BindDualValues(m.learnable()...),
+		//G.BindDualValues(m.learnable()...),
 		//G.TraceExec(),
 		//G.WithInfWatch(),
 		//G.WithNaNWatch(),
@@ -93,8 +93,8 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 	)
 	m.SetVM(vm)
 
-	//solver := G.NewRMSPropSolver(G.WithBatchSize(float64(batchSize)))
-	solver := G.NewAdamSolver(G.WithLearnRate(0.01), G.WithBatchSize(float64(batchSize)))
+	solver := G.NewRMSPropSolver(G.WithBatchSize(float64(batchSize)))
+	//solver := G.NewAdamSolver(G.WithLearnRate(0.01), G.WithBatchSize(float64(batchSize)))
 	//defer func() {
 	//	vm.Close()
 	//	m.SetVM(nil)
@@ -172,7 +172,7 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 			vm.Reset()
 			bar.Increment()
 		}
-		log.Printf("Epoch %d | cost %v", i, costVal)
+		log.Printf("Epoch %d | cost %v", i, cost.Value().Data())
 
 		//log.Printf("Test accuracy %v | rocauc %v")
 	}
