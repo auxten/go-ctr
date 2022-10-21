@@ -20,7 +20,7 @@ func TestFeatureEngineer(t *testing.T) {
 	var (
 		recSys = &MovielensRec{
 			DataPath:  "movielens.db",
-			SampleCnt: 2000,
+			SampleCnt: 79948,
 		}
 		model rcmd.Predictor
 		err   error
@@ -31,7 +31,7 @@ func TestFeatureEngineer(t *testing.T) {
 		"relu", "adam", 1e-5,
 	)
 	fitter.Verbose = true
-	fitter.MaxIter = 10
+	fitter.MaxIter = 200
 	fitter.LearningRate = "adaptive"
 	fitter.LearningRateInit = .0025
 

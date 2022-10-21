@@ -3,6 +3,7 @@ package movielens
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"testing"
 
 	"github.com/auxten/edgeRec/nn/metrics"
@@ -12,11 +13,13 @@ import (
 )
 
 func TestDinOnMovielens(t *testing.T) {
+	rand.Seed(42)
+
 	var (
 		movielens = &MovielensRec{
-			DataPath: "movielens.db",
-			//SampleCnt: 79948,
-			SampleCnt: 2000,
+			DataPath:  "movielens.db",
+			SampleCnt: 79948,
+			//SampleCnt: 2000,
 		}
 		model rcmd.Predictor
 		err   error
@@ -26,7 +29,7 @@ func TestDinOnMovielens(t *testing.T) {
 		dinModel := &dinImpl{
 			predBatchSize: 100,
 			batchSize:     200,
-			epochs:        20,
+			epochs:        200,
 		}
 		trainCtx := context.Background()
 		model, err = rcmd.Train(trainCtx, movielens, dinModel)
@@ -35,7 +38,7 @@ func TestDinOnMovielens(t *testing.T) {
 	})
 
 	Convey("Predict din model", t, func() {
-		testCount := 200
+		testCount := 20600
 		rows, err := db.Query(
 			"SELECT userId, movieId, rating, timestamp FROM ratings_test ORDER BY timestamp, userId ASC LIMIT ?", testCount)
 		So(err, ShouldBeNil)
