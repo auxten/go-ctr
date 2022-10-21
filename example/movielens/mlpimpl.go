@@ -87,6 +87,7 @@ func (d *mlpImpl) Fit(trainSample *rcmd.TrainSample) (pred rcmd.PredictAbstract,
 		log.Errorf("marshal din model failed: %v", err)
 		return
 	}
+	//log.Debugf("din model json: %s", dinJson)
 	dinPred, err := din.NewSimpleMLPFromJson(dinJson)
 	if err != nil {
 		log.Errorf("new din model from json failed: %v", err)

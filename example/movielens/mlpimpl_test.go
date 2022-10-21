@@ -24,7 +24,7 @@ func TestSimpleMLPOnMovielens(t *testing.T) {
 		movielens = &MovielensRec{
 			DataPath: "movielens.db",
 			//SampleCnt: 79948,
-			SampleCnt: 20000,
+			SampleCnt: 10000,
 		}
 		model rcmd.Predictor
 		err   error
