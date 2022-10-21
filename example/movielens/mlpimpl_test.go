@@ -22,9 +22,9 @@ func TestSimpleMLPOnMovielens(t *testing.T) {
 
 	var (
 		movielens = &MovielensRec{
-			DataPath: "movielens.db",
-			//SampleCnt: 79948,
-			SampleCnt: 10000,
+			DataPath:  "movielens.db",
+			SampleCnt: 79948,
+			//SampleCnt: 10000,
 		}
 		model rcmd.Predictor
 		err   error
@@ -33,7 +33,7 @@ func TestSimpleMLPOnMovielens(t *testing.T) {
 	Convey("Train din model", t, func() {
 		mlpImpl := &mlpImpl{
 			predBatchSize: 100,
-			batchSize:     20,
+			batchSize:     200,
 			epochs:        200,
 		}
 		trainCtx := context.Background()
@@ -43,7 +43,7 @@ func TestSimpleMLPOnMovielens(t *testing.T) {
 	})
 
 	Convey("Predict din model", t, func() {
-		testCount := 200
+		testCount := 20600
 		rows, err := db.Query(
 			"SELECT userId, movieId, rating, timestamp FROM ratings_test ORDER BY timestamp, userId ASC LIMIT ?", testCount)
 		So(err, ShouldBeNil)

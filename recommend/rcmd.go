@@ -349,7 +349,7 @@ func GetSample(recSys RecSys, ctx context.Context) (sample *TrainSample, err err
 		)
 		vec, uWidth, iWidth, err = GetSampleVector(ctx, userFeatureCache, itemFeatureCache, userBehaviorCache, recSys, &s)
 		if err != nil {
-			log.Errorf("get sample vector failed: %v", err)
+			log.Warnf("get sample vector failed: %v", err)
 			continue
 		}
 
