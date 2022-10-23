@@ -4,6 +4,8 @@
 *.dll
 *.so
 *.dylib
+*.run
+*.rpm
 
 *.zip
 model.txt
