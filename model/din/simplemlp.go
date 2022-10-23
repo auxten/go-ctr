@@ -158,7 +158,7 @@ func (mlp *SimpleMLP) Fwd(xUserProfile, ubMatrix, xItemFeature, xCtxFeature *G.N
 	mlp1Out := G.Must(G.LeakyRelu(G.Must(G.Mul(mlp0Out, mlp.mlp1)), 0.1))
 	mlp1Out = G.Must(G.Dropout(mlp1Out, mlp.d1))
 
-	mlp.out = G.Must(G.Sigmoid(G.Must(G.Mul(mlp1Out, mlp.mlp2))))
+	mlp.out = G.Must(G.SoftMax(G.Must(G.Mul(mlp1Out, mlp.mlp2)), 0))
 	mlp.xUserProfile = xUserProfile
 	mlp.xItemFeature = xItemFeature
 	mlp.xCtxFeature = xCtxFeature
