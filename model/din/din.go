@@ -213,7 +213,7 @@ func NewDinNet(
 	}
 }
 
-//Fwd performs the forward pass
+// Fwd performs the forward pass
 // xUserProfile: [batchSize, userProfileDim]
 // xUserBehaviors: [batchSize, uBehaviorSize, uBehaviorDim]
 // xItemFeature: [batchSize, iFeatureDim]
@@ -249,7 +249,7 @@ func (din *DinNet) Fwd(xUserProfile, xUbMatrix, xItemFeature, xCtxFeature *G.Nod
 		actConcat := G.Must(G.Concat(1, ub, outProducts, xItemFeature))
 		actOut := G.Must(G.BroadcastHadamardProd(
 			ub,
-			G.Must(G.Rectify(
+			G.Must(G.SoftMax(
 				G.Must(G.Mul(
 					G.Must(G.Mul(actConcat, din.att0[i])),
 					din.att1[i],
@@ -276,7 +276,7 @@ func (din *DinNet) Fwd(xUserProfile, xUbMatrix, xItemFeature, xCtxFeature *G.Nod
 	mlp1Out = G.Must(G.Dropout(mlp1Out, din.d1))
 	// mlp2.Shape: [80, 1]
 	// out.Shape: [batchSize, 1]
-	mlp2Out := G.Must(G.Sigmoid(G.Must(G.Mul(mlp1Out, din.mlp2))))
+	mlp2Out := G.Must(G.SoftMax(G.Must(G.Mul(mlp1Out, din.mlp2)), 0))
 
 	din.out = mlp2Out
 	din.xUserProfile = xUserProfile
