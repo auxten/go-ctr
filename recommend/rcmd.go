@@ -93,17 +93,19 @@ type UserFeaturer interface {
 	GetUserFeature(context.Context, int) (Tensor, error)
 }
 
-//UserBehavior interface is used to get user behavior feature.
+// UserBehavior interface is used to get user behavior feature.
 // typically, it is user's clicked/bought/liked item id list ordered by time desc.
 // During training, you should limit the seq to avoid time travel,
-//	maxPk or maxTs could be used here:
-//	 - maxPk is the max primary key of user behavior table.
-//	 - maxTs is the max timestamp of user behavior table.
-//	 - maxLen is the max length of user behavior seq, if total len is
-// 		greater than maxLen, the seq will be truncated from the tail.
-//  	which is latest maxLen items.
+//
+//		maxPk or maxTs could be used here:
+//		 - maxPk is the max primary key of user behavior table.
+//		 - maxTs is the max timestamp of user behavior table.
+//		 - maxLen is the max length of user behavior seq, if total len is
+//			greater than maxLen, the seq will be truncated from the tail.
+//	 	which is latest maxLen items.
+//
 // specially, -1 means no limit.
-//During prediction, you should use the latest user behavior seq.
+// During prediction, you should use the latest user behavior seq.
 type UserBehavior interface {
 	GetUserBehavior(ctx context.Context, userId int,
 		maxLen int64, maxPk int64, maxTs int64) (itemSeq []int, err error)
@@ -349,7 +351,7 @@ func GetSample(recSys RecSys, ctx context.Context) (sample *TrainSample, err err
 		)
 		vec, uWidth, iWidth, err = GetSampleVector(ctx, userFeatureCache, itemFeatureCache, userBehaviorCache, recSys, &s)
 		if err != nil {
-			log.Warnf("get sample vector failed: %v", err)
+			log.Debugf("get sample vector failed: %v", err)
 			continue
 		}
 
@@ -394,7 +396,7 @@ func GetSample(recSys RecSys, ctx context.Context) (sample *TrainSample, err err
 			Input:    vec,
 			Response: []float64{s.Label},
 		})
-		if len(sample.Data)%100 == 0 {
+		if len(sample.Data)%1000 == 0 {
 			log.Infof("sample size: %d", len(sample.Data))
 		}
 	}
