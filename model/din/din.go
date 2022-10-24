@@ -204,8 +204,8 @@ func NewDinNet(
 		att0: att0,
 		att1: att1,
 
-		d0: 0.01,
-		d1: 0.01,
+		d0: 0.0,
+		d1: 0.0,
 
 		mlp0: mlp0,
 		mlp1: mlp1,
@@ -249,11 +249,11 @@ func (din *DinNet) Fwd(xUserProfile, xUbMatrix, xItemFeature, xCtxFeature *G.Nod
 		actConcat := G.Must(G.Concat(1, ub, outProducts, xItemFeature))
 		actOut := G.Must(G.BroadcastHadamardProd(
 			ub,
-			G.Must(G.LeakyRelu(
+			G.Must(G.Rectify(
 				G.Must(G.Mul(
 					G.Must(G.Mul(actConcat, din.att0[i])),
 					din.att1[i],
-				)), 0.1)), // [batchSize, 1]
+				)))), // [batchSize, 1]
 			nil, []byte{1},
 		)) // [batchSize, uBehaviorDim]
 
