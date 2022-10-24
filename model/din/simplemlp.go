@@ -80,9 +80,9 @@ func NewSimpleMLPFromJson(data []byte) (mlp *SimpleMLP, err error) {
 	)
 
 	mlp2 := G.NewMatrix(g, dt,
-		G.WithShape(mlp1_2, 1),
+		G.WithShape(mlp1_2, 2),
 		G.WithName("mlp2"),
-		G.WithValue(tensor.New(tensor.WithShape(mlp1_2, 1), tensor.WithBacking(m.Mlp2))),
+		G.WithValue(tensor.New(tensor.WithShape(mlp1_2, 2), tensor.WithBacking(m.Mlp2))),
 	)
 
 	mlp = &SimpleMLP{
@@ -116,7 +116,7 @@ func NewSimpleMLP(
 	g := G.NewGraph()
 	mlp0 := G.NewMatrix(g, G.Float64, G.WithShape(uProfileDim+uBehaviorSize*uBehaviorDim+iFeatureDim+cFeatureDim, mlp0_1), G.WithName("mlp0"), G.WithInit(G.Gaussian(0, 1)))
 	mlp1 := G.NewMatrix(g, G.Float64, G.WithShape(mlp0_1, mlp1_2), G.WithName("mlp1"), G.WithInit(G.Gaussian(0, 1)))
-	mlp2 := G.NewMatrix(g, G.Float64, G.WithShape(mlp1_2, 1), G.WithName("mlp2"), G.WithInit(G.Gaussian(0, 1)))
+	mlp2 := G.NewMatrix(g, G.Float64, G.WithShape(mlp1_2, 2), G.WithName("mlp2"), G.WithInit(G.Gaussian(0, 1)))
 	return &SimpleMLP{
 		uProfileDim:   uProfileDim,
 		uBehaviorSize: uBehaviorSize,
@@ -158,7 +158,7 @@ func (mlp *SimpleMLP) Fwd(xUserProfile, ubMatrix, xItemFeature, xCtxFeature *G.N
 	mlp1Out := G.Must(G.LeakyRelu(G.Must(G.Mul(mlp0Out, mlp.mlp1)), 0.1))
 	mlp1Out = G.Must(G.Dropout(mlp1Out, mlp.d1))
 
-	mlp.out = G.Must(G.SoftMax(G.Must(G.Mul(mlp1Out, mlp.mlp2)), 0))
+	mlp.out = G.Must(G.SoftMax(G.Must(G.Mul(mlp1Out, mlp.mlp2)), -1))
 	mlp.xUserProfile = xUserProfile
 	mlp.xItemFeature = xItemFeature
 	mlp.xCtxFeature = xCtxFeature

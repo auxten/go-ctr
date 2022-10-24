@@ -124,9 +124,9 @@ func NewDinNetFromJson(data []byte) (din *DinNet, err error) {
 	)
 
 	mlp2 := G.NewMatrix(g, dt,
-		G.WithShape(mlp1_2, 1),
+		G.WithShape(mlp1_2, 2),
 		G.WithName("mlp2"),
-		G.WithValue(tensor.New(tensor.WithShape(mlp1_2, 1), tensor.WithBacking(m.Mlp2))),
+		G.WithValue(tensor.New(tensor.WithShape(mlp1_2, 2), tensor.WithBacking(m.Mlp2))),
 	)
 
 	din = &DinNet{
@@ -191,7 +191,7 @@ func NewDinNet(
 
 	mlp1 := G.NewMatrix(g, dt, G.WithShape(mlp0_1, mlp1_2), G.WithName("mlp1"), G.WithInit(G.Gaussian(0, 1)))
 
-	mlp2 := G.NewMatrix(g, dt, G.WithShape(mlp1_2, 1), G.WithName("mlp2"), G.WithInit(G.Gaussian(0, 1)))
+	mlp2 := G.NewMatrix(g, dt, G.WithShape(mlp1_2, 2), G.WithName("mlp2"), G.WithInit(G.Gaussian(0, 1)))
 
 	return &DinNet{
 		uProfileDim:   uProfileDim,
@@ -249,11 +249,11 @@ func (din *DinNet) Fwd(xUserProfile, xUbMatrix, xItemFeature, xCtxFeature *G.Nod
 		actConcat := G.Must(G.Concat(1, ub, outProducts, xItemFeature))
 		actOut := G.Must(G.BroadcastHadamardProd(
 			ub,
-			G.Must(G.SoftMax(
+			G.Must(G.LeakyRelu(
 				G.Must(G.Mul(
 					G.Must(G.Mul(actConcat, din.att0[i])),
 					din.att1[i],
-				)))), // [batchSize, 1]
+				)), 0.1)), // [batchSize, 1]
 			nil, []byte{1},
 		)) // [batchSize, uBehaviorDim]
 
@@ -274,9 +274,11 @@ func (din *DinNet) Fwd(xUserProfile, xUbMatrix, xItemFeature, xCtxFeature *G.Nod
 	// out.Shape: [batchSize, 80]
 	mlp1Out := G.Must(G.LeakyRelu(G.Must(G.Mul(mlp0Out, din.mlp1)), 0.1))
 	mlp1Out = G.Must(G.Dropout(mlp1Out, din.d1))
-	// mlp2.Shape: [80, 1]
-	// out.Shape: [batchSize, 1]
-	mlp2Out := G.Must(G.SoftMax(G.Must(G.Mul(mlp1Out, din.mlp2)), 0))
+	// mlp2.Shape: [80, 2]
+	// out.Shape: [batchSize, 2]
+	// slicedOut.Shape: [batchSize, 1]
+	//mlp2Out := G.Must(G.Slice(G.Must(G.SoftMax(G.Must(G.Mul(mlp1Out, din.mlp2)), -1)), nil, G.S(0)))
+	mlp2Out := G.Must(G.SoftMax(G.Must(G.Mul(mlp1Out, din.mlp2)), -1))
 
 	din.out = mlp2Out
 	din.xUserProfile = xUserProfile

@@ -46,7 +46,7 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 	xUserBehaviorMatrix := G.NewMatrix(g, dt, G.WithShape(batchSize, uBehaviorSize*uBehaviorDim), G.WithName("xUserBehaviorMatrix"))
 	xItemFeature := G.NewMatrix(g, dt, G.WithShape(batchSize, iFeatureDim), G.WithName("xItemFeature"))
 	xCtxFeature := G.NewMatrix(g, dt, G.WithShape(batchSize, cFeatureDim), G.WithName("xCtxFeature"))
-	y := G.NewTensor(g, dt, 2, G.WithShape(batchSize, 1), G.WithName("y"))
+	y := G.NewTensor(g, dt, 2, G.WithShape(batchSize, 2), G.WithName("y"))
 	//m := NewDinNet(g, uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim)
 	if err = m.Fwd(xUserProfile, xUserBehaviorMatrix, xItemFeature, xCtxFeature, batchSize, uBehaviorSize, uBehaviorDim); err != nil {
 		log.Fatalf("%+v", err)
@@ -54,10 +54,13 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 
 	//losses := G.Must(G.HadamardProd(G.Must(G.Neg(G.Must(G.Log(m.out)))), y))
 	//losses := G.Must(G.Square(G.Must(G.Sub(m.Out(), y))))
-	positive := G.Must(G.HadamardProd(G.Must(G.Log(m.Out())), y))
-	negative := G.Must(G.HadamardProd(G.Must(G.Log(G.Must(G.Sub(G.NewConstant(float64(1.0+1e-16)), m.Out())))), G.Must(G.Sub(G.NewConstant(float64(1.0)), y))))
+	//positiveOut := G.Must(G.Slice(m.Out(), nil, G.S(0)))
+	//negativeOut := G.Must(G.Slice(m.Out(), nil, G.S(1)))
+	//positive := G.Must(G.HadamardProd(G.Must(G.Log(m.Out())), y))
+	//negative := G.Must(G.HadamardProd(G.Must(G.Log(G.Must(G.Sub(G.NewConstant(float64(1.0+1e-16)), m.Out())))), G.Must(G.Sub(G.NewConstant(float64(1.0)), y))))
 	//negative := G.Must(G.Log(G.Must(G.Sub(G.NewConstant(float64(1.000000001)), m.Out()))))
-	cost := G.Must(G.Neg(G.Must(G.Mean(G.Must(G.Add(positive, negative))))))
+	prod := G.Must(G.HadamardProd(G.Must(G.Log(m.Out())), y))
+	cost := G.Must(G.Neg(G.Must(G.Mean(G.Must(G.Sum(prod, 1))))))
 
 	// we want to track costs
 	var costVal G.Value
@@ -159,7 +162,15 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 			if yVal, err = targets.Slice(G.S(start, end)); err != nil {
 				log.Fatalf("Unable to slice y %v", err)
 			}
-			if err = G.Let(y, yVal); err != nil {
+			//new tensor with shape (batchSize, 2)
+			yLogit := make([]float64, batchSize*2)
+			for i := 0; i < batchSize; i++ {
+				yLogit[i*2] = yVal.Data().([]float64)[i]
+				yLogit[i*2+1] = 1.0 - yVal.Data().([]float64)[i]
+			}
+			yLogitVal := tensor.New(tensor.WithShape(batchSize, 2), tensor.WithBacking(yLogit))
+
+			if err = G.Let(y, yLogitVal); err != nil {
 				log.Fatalf("Unable to let y %v", err)
 			}
 
@@ -222,7 +233,7 @@ func Predict(m Model, numExamples, batchSize int, si *rcmd.SampleInfo, inputs te
 
 	batches := numExamples / batchSize
 
-	for b := 0; b < batches; b++ {
+	for b := 0; b <= batches; b++ {
 		start := b * batchSize
 		end := start + batchSize
 		if start >= numExamples {
@@ -239,7 +250,7 @@ func Predict(m Model, numExamples, batchSize int, si *rcmd.SampleInfo, inputs te
 			xCtxFeatureVal    tensor.Tensor
 		)
 
-		if xUserProfileVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.UserProfileRange[0], si.UserProfileRange[1])}...); err != nil {
+		if xUserProfileVal, err = inputs.Slice([]tensor.Slice{G.S(start, start+batchSize), G.S(si.UserProfileRange[0], si.UserProfileRange[1])}...); err != nil {
 			log.Errorf("Unable to slice xUserProfileVal %v", err)
 			return nil, err
 		}
@@ -248,7 +259,7 @@ func Predict(m Model, numExamples, batchSize int, si *rcmd.SampleInfo, inputs te
 			return nil, err
 		}
 
-		if xUserBehaviorsVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.UserBehaviorRange[0], si.UserBehaviorRange[1])}...); err != nil {
+		if xUserBehaviorsVal, err = inputs.Slice([]tensor.Slice{G.S(start, start+batchSize), G.S(si.UserBehaviorRange[0], si.UserBehaviorRange[1])}...); err != nil {
 			log.Errorf("Unable to slice xUserBehaviorsVal %v", err)
 			return nil, err
 		}
@@ -257,7 +268,7 @@ func Predict(m Model, numExamples, batchSize int, si *rcmd.SampleInfo, inputs te
 			return nil, err
 		}
 
-		if xItemFeatureVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.ItemFeatureRange[0], si.ItemFeatureRange[1])}...); err != nil {
+		if xItemFeatureVal, err = inputs.Slice([]tensor.Slice{G.S(start, start+batchSize), G.S(si.ItemFeatureRange[0], si.ItemFeatureRange[1])}...); err != nil {
 			log.Errorf("Unable to slice xItemFeatureVal %v", err)
 			return nil, err
 		}
@@ -266,7 +277,7 @@ func Predict(m Model, numExamples, batchSize int, si *rcmd.SampleInfo, inputs te
 			return nil, err
 		}
 
-		if xCtxFeatureVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.CtxFeatureRange[0], si.CtxFeatureRange[1])}...); err != nil {
+		if xCtxFeatureVal, err = inputs.Slice([]tensor.Slice{G.S(start, start+batchSize), G.S(si.CtxFeatureRange[0], si.CtxFeatureRange[1])}...); err != nil {
 			log.Errorf("Unable to slice xCtxFeatureVal %v", err)
 			return nil, err
 		}
@@ -279,12 +290,14 @@ func Predict(m Model, numExamples, batchSize int, si *rcmd.SampleInfo, inputs te
 			log.Errorf("Failed at batch %d. Error: %v", b, err)
 			return nil, err
 		}
-		vm.Reset()
 
 		//get y
 		yVal := outputNode.Value().Data().([]float64)
-		y = append(y, yVal...)
-
+		for i := 0; i < end-start; i++ {
+			y = append(y, yVal[2*i])
+		}
+		//y = append(y, yVal...)
+		vm.Reset()
 	}
 	return
 }
