@@ -21,6 +21,10 @@ type dinImpl struct {
 	batchSize, epochs int
 	sampleInfo        *rcmd.SampleInfo
 
+	// stop training on earlyStop count of no cost improvement
+	// 0 means no early stop
+	earlyStop int
+
 	learner *din.DinNet
 	pred    *din.DinNet
 }
@@ -73,7 +77,7 @@ func (d *dinImpl) Fit(trainSample *rcmd.TrainSample) (pred rcmd.PredictAbstract,
 	inputs = tensor.New(tensor.WithShape(X.Dims()), tensor.WithBacking(X.RawMatrix().Data))
 	labels = tensor.New(tensor.WithShape(Y.Dims()), tensor.WithBacking(Y.RawMatrix().Data))
 	err = din.Train(d.uProfileDim, d.uBehaviorSize, d.uBehaviorDim, d.iFeatureDim, d.cFeatureDim,
-		numExamples, d.batchSize, d.epochs,
+		numExamples, d.batchSize, d.epochs, d.earlyStop,
 		d.sampleInfo,
 		inputs, labels,
 		d.learner,
