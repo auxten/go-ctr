@@ -125,8 +125,8 @@ func NewSimpleMLP(
 		cFeatureDim:   cFeatureDim,
 
 		g:    g,
-		d0:   0.01,
-		d1:   0.01,
+		d0:   0.0,
+		d1:   0.0,
 		mlp0: mlp0,
 		mlp1: mlp1,
 		mlp2: mlp2,
@@ -153,9 +153,9 @@ func (mlp *SimpleMLP) Fwd(xUserProfile, ubMatrix, xItemFeature, xCtxFeature *G.N
 	// concat
 	x := G.Must(G.Concat(1, xUserProfile, xUserBehaviors, xItemFeature, xCtxFeature))
 	// mlp
-	mlp0Out := G.Must(G.LeakyRelu(G.Must(G.Mul(x, mlp.mlp0)), 0.1))
+	mlp0Out := G.Must(G.Sigmoid(G.Must(G.Mul(x, mlp.mlp0))))
 	mlp0Out = G.Must(G.Dropout(mlp0Out, mlp.d0))
-	mlp1Out := G.Must(G.LeakyRelu(G.Must(G.Mul(mlp0Out, mlp.mlp1)), 0.1))
+	mlp1Out := G.Must(G.Sigmoid(G.Must(G.Mul(mlp0Out, mlp.mlp1))))
 	mlp1Out = G.Must(G.Dropout(mlp1Out, mlp.d1))
 
 	mlp.out = G.Must(G.Sigmoid(G.Must(G.Mul(mlp1Out, mlp.mlp2))))

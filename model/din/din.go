@@ -204,8 +204,8 @@ func NewDinNet(
 		att0: att0,
 		att1: att1,
 
-		d0: 0.01,
-		d1: 0.01,
+		d0: 0.0,
+		d1: 0.0,
 
 		mlp0: mlp0,
 		mlp1: mlp1,
@@ -213,7 +213,7 @@ func NewDinNet(
 	}
 }
 
-//Fwd performs the forward pass
+// Fwd performs the forward pass
 // xUserProfile: [batchSize, userProfileDim]
 // xUserBehaviors: [batchSize, uBehaviorSize, uBehaviorDim]
 // xItemFeature: [batchSize, iFeatureDim]
@@ -249,7 +249,7 @@ func (din *DinNet) Fwd(xUserProfile, xUbMatrix, xItemFeature, xCtxFeature *G.Nod
 		actConcat := G.Must(G.Concat(1, ub, outProducts, xItemFeature))
 		actOut := G.Must(G.BroadcastHadamardProd(
 			ub,
-			G.Must(G.Rectify(
+			G.Must(G.Sigmoid(
 				G.Must(G.Mul(
 					G.Must(G.Mul(actConcat, din.att0[i])),
 					din.att1[i],
@@ -268,11 +268,11 @@ func (din *DinNet) Fwd(xUserProfile, xUbMatrix, xItemFeature, xCtxFeature *G.Nod
 
 	// mlp0.Shape: [userProfileDim+userBehaviorDim+itemFeatureDim+contextFeatureDim, 200]
 	// out.Shape: [batchSize, 200]
-	mlp0Out := G.Must(G.LeakyRelu(G.Must(G.Mul(concat, din.mlp0)), 0.1))
+	mlp0Out := G.Must(G.Sigmoid(G.Must(G.Mul(concat, din.mlp0))))
 	mlp0Out = G.Must(G.Dropout(mlp0Out, din.d0))
 	// mlp1.Shape: [200, 80]
 	// out.Shape: [batchSize, 80]
-	mlp1Out := G.Must(G.LeakyRelu(G.Must(G.Mul(mlp0Out, din.mlp1)), 0.1))
+	mlp1Out := G.Must(G.Sigmoid(G.Must(G.Mul(mlp0Out, din.mlp1))))
 	mlp1Out = G.Must(G.Dropout(mlp1Out, din.d1))
 	// mlp2.Shape: [80, 1]
 	// out.Shape: [batchSize, 1]

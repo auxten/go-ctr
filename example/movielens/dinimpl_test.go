@@ -19,7 +19,7 @@ func TestDinOnMovielens(t *testing.T) {
 		movielens = &MovielensRec{
 			DataPath:  "movielens.db",
 			SampleCnt: 79948,
-			//SampleCnt: 2000,
+			//SampleCnt: 10000,
 		}
 		model rcmd.Predictor
 		err   error
