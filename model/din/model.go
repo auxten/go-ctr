@@ -93,8 +93,12 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 	)
 	m.SetVM(vm)
 
-	//solver := G.NewRMSPropSolver(G.WithBatchSize(float64(batchSize)))
-	solver := G.NewAdamSolver(G.WithLearnRate(0.001), G.WithBatchSize(float64(batchSize)))
+	solver := G.NewRMSPropSolver(G.WithBatchSize(float64(batchSize)), G.WithL2Reg(0.0001))
+	//solver := G.NewVanillaSolver(G.WithBatchSize(float64(batchSize)), G.WithLearnRate(0.001))
+	//solver := G.NewBarzilaiBorweinSolver(G.WithBatchSize(float64(batchSize)), G.WithLearnRate(0.001))
+	//solver := G.NewAdaGradSolver(G.WithBatchSize(float64(batchSize)), G.WithLearnRate(0.001))
+	//solver := G.NewMomentum(G.WithBatchSize(float64(batchSize)), G.WithLearnRate(0.001))
+	//solver := G.NewAdamSolver(G.WithLearnRate(0.001), G.WithBatchSize(float64(batchSize)))
 	//defer func() {
 	//	vm.Close()
 	//	m.SetVM(nil)
@@ -222,7 +226,7 @@ func Predict(m Model, numExamples, batchSize int, si *rcmd.SampleInfo, inputs te
 
 	batches := numExamples / batchSize
 
-	for b := 0; b < batches; b++ {
+	for b := 0; b <= batches; b++ {
 		start := b * batchSize
 		end := start + batchSize
 		if start >= numExamples {
@@ -239,7 +243,7 @@ func Predict(m Model, numExamples, batchSize int, si *rcmd.SampleInfo, inputs te
 			xCtxFeatureVal    tensor.Tensor
 		)
 
-		if xUserProfileVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.UserProfileRange[0], si.UserProfileRange[1])}...); err != nil {
+		if xUserProfileVal, err = inputs.Slice([]tensor.Slice{G.S(start, start+batchSize), G.S(si.UserProfileRange[0], si.UserProfileRange[1])}...); err != nil {
 			log.Errorf("Unable to slice xUserProfileVal %v", err)
 			return nil, err
 		}
@@ -248,7 +252,7 @@ func Predict(m Model, numExamples, batchSize int, si *rcmd.SampleInfo, inputs te
 			return nil, err
 		}
 
-		if xUserBehaviorsVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.UserBehaviorRange[0], si.UserBehaviorRange[1])}...); err != nil {
+		if xUserBehaviorsVal, err = inputs.Slice([]tensor.Slice{G.S(start, start+batchSize), G.S(si.UserBehaviorRange[0], si.UserBehaviorRange[1])}...); err != nil {
 			log.Errorf("Unable to slice xUserBehaviorsVal %v", err)
 			return nil, err
 		}
@@ -257,7 +261,7 @@ func Predict(m Model, numExamples, batchSize int, si *rcmd.SampleInfo, inputs te
 			return nil, err
 		}
 
-		if xItemFeatureVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.ItemFeatureRange[0], si.ItemFeatureRange[1])}...); err != nil {
+		if xItemFeatureVal, err = inputs.Slice([]tensor.Slice{G.S(start, start+batchSize), G.S(si.ItemFeatureRange[0], si.ItemFeatureRange[1])}...); err != nil {
 			log.Errorf("Unable to slice xItemFeatureVal %v", err)
 			return nil, err
 		}
@@ -266,7 +270,7 @@ func Predict(m Model, numExamples, batchSize int, si *rcmd.SampleInfo, inputs te
 			return nil, err
 		}
 
-		if xCtxFeatureVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.CtxFeatureRange[0], si.CtxFeatureRange[1])}...); err != nil {
+		if xCtxFeatureVal, err = inputs.Slice([]tensor.Slice{G.S(start, start+batchSize), G.S(si.CtxFeatureRange[0], si.CtxFeatureRange[1])}...); err != nil {
 			log.Errorf("Unable to slice xCtxFeatureVal %v", err)
 			return nil, err
 		}
@@ -279,12 +283,14 @@ func Predict(m Model, numExamples, batchSize int, si *rcmd.SampleInfo, inputs te
 			log.Errorf("Failed at batch %d. Error: %v", b, err)
 			return nil, err
 		}
-		vm.Reset()
 
 		//get y
 		yVal := outputNode.Value().Data().([]float64)
-		y = append(y, yVal...)
-
+		for i := 0; i < end-start; i++ {
+			y = append(y, yVal[i])
+		}
+		//y = append(y, yVal...)
+		vm.Reset()
 	}
 	return
 }

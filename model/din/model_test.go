@@ -25,7 +25,8 @@ func TestMultiModel(t *testing.T) {
 		numExamples = 100000
 		epochs      = 20
 
-		testSamples   = 100
+		// to test sample count not fully match batch size
+		testSamples   = 118
 		testBatchSize = 20
 
 		sampleInfo = &rcmd.SampleInfo{
