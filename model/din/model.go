@@ -34,7 +34,7 @@ type Model interface {
 }
 
 func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim int,
-	numExamples, batchSize, epochs int,
+	numExamples, batchSize, epochs, earlyStop int,
 	si *rcmd.SampleInfo,
 	inputs, targets tensor.Tensor,
 	//testInputs, testTargets tensor.Tensor,
@@ -60,11 +60,11 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 	cost := G.Must(G.Neg(G.Must(G.Mean(G.Must(G.Add(positive, negative))))))
 
 	// we want to track costs
-	var costVal G.Value
-	G.Read(cost, &costVal)
-
-	var yOut G.Value
-	G.Read(m.Out(), &yOut)
+	//var costVal G.Value
+	//G.Read(cost, &costVal)
+	//
+	//var yOut G.Value
+	//G.Read(m.Out(), &yOut)
 
 	if _, err = G.Grad(cost, m.learnable()...); err != nil {
 		log.Fatal(err)
@@ -109,6 +109,10 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 	batches := numExamples / batchSize
 	log.Printf("Batches %d", batches)
 	bar := pb.New(batches)
+	var (
+		bestCost  = math.MaxFloat64
+		noImprove int
+	)
 
 	for i := 0; i < epochs; i++ {
 		bar.Prefix(fmt.Sprintf("Epoch %d", i))
@@ -176,8 +180,18 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 			vm.Reset()
 			bar.Increment()
 		}
-		log.Printf("Epoch %d | cost %v", i, cost.Value().Data())
-
+		costVal := cost.Value().Data().(float64)
+		if costVal < bestCost {
+			bestCost = costVal
+			noImprove = 0
+		} else {
+			noImprove++
+		}
+		log.Printf("Epoch %d | noImprove %d | cost %v", i, noImprove, costVal)
+		if earlyStop != 0 && noImprove >= earlyStop {
+			log.Printf("Early stop at epoch %d", i)
+			break
+		}
 		//log.Printf("Test accuracy %v | rocauc %v")
 	}
 	return

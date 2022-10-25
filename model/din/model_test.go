@@ -78,7 +78,7 @@ func TestMultiModel(t *testing.T) {
 	dinModel := NewDinNet(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim)
 	Convey("Din model", t, func() {
 		err := Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim,
-			numExamples, batchSize, epochs,
+			numExamples, batchSize, epochs, 0,
 			sampleInfo,
 			inputs, labels,
 			dinModel,
@@ -111,7 +111,7 @@ func TestMultiModel(t *testing.T) {
 	mlpModel := NewSimpleMLP(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim)
 	Convey("Simple MLP", t, func() {
 		err := Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim,
-			numExamples, batchSize, epochs,
+			numExamples, batchSize, epochs, 10,
 			sampleInfo,
 			inputs, labels,
 			mlpModel,
