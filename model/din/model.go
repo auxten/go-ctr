@@ -93,7 +93,7 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 	)
 	m.SetVM(vm)
 
-	solver := G.NewRMSPropSolver(G.WithBatchSize(float64(batchSize)), G.WithL2Reg(0.0001))
+	solver := G.NewRMSPropSolver(G.WithBatchSize(float64(batchSize)))
 	//solver := G.NewVanillaSolver(G.WithBatchSize(float64(batchSize)), G.WithLearnRate(0.001))
 	//solver := G.NewBarzilaiBorweinSolver(G.WithBatchSize(float64(batchSize)), G.WithLearnRate(0.001))
 	//solver := G.NewAdaGradSolver(G.WithBatchSize(float64(batchSize)), G.WithLearnRate(0.001))
