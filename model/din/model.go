@@ -55,7 +55,7 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 	//losses := G.Must(G.HadamardProd(G.Must(G.Neg(G.Must(G.Log(m.out)))), y))
 	//losses := G.Must(G.Square(G.Must(G.Sub(m.Out(), y))))
 	positive := G.Must(G.HadamardProd(G.Must(G.Log(m.Out())), y))
-	negative := G.Must(G.HadamardProd(G.Must(G.Log(G.Must(G.Sub(G.NewConstant(float64(1.0)), m.Out())))), G.Must(G.Sub(G.NewConstant(float64(1.0)), y))))
+	negative := G.Must(G.HadamardProd(G.Must(G.Log(G.Must(G.Sub(G.NewConstant(float64(1.0+1e-45)), m.Out())))), G.Must(G.Sub(G.NewConstant(float64(1.0)), y))))
 	//negative := G.Must(G.Log(G.Must(G.Sub(G.NewConstant(float64(1.000000001)), m.Out()))))
 	cost := G.Must(G.Neg(G.Must(G.Mean(G.Must(G.Add(positive, negative))))))
 
@@ -84,7 +84,7 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 
 	vm := G.NewTapeMachine(g,
 		G.WithPrecompiled(prog, locMap),
-		//G.BindDualValues(m.learnable()...),
+		G.BindDualValues(m.learnable()...),
 		//G.TraceExec(),
 		//G.WithInfWatch(),
 		//G.WithNaNWatch(),
@@ -93,12 +93,12 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 	)
 	m.SetVM(vm)
 
-	solver := G.NewRMSPropSolver(G.WithBatchSize(float64(batchSize)))
+	//solver := G.NewRMSPropSolver(G.WithBatchSize(float64(batchSize)))
 	//solver := G.NewVanillaSolver(G.WithBatchSize(float64(batchSize)), G.WithLearnRate(0.001))
 	//solver := G.NewBarzilaiBorweinSolver(G.WithBatchSize(float64(batchSize)), G.WithLearnRate(0.001))
 	//solver := G.NewAdaGradSolver(G.WithBatchSize(float64(batchSize)), G.WithLearnRate(0.001))
 	//solver := G.NewMomentum(G.WithBatchSize(float64(batchSize)), G.WithLearnRate(0.001))
-	//solver := G.NewAdamSolver(G.WithLearnRate(0.001), G.WithBatchSize(float64(batchSize)))
+	solver := G.NewAdamSolver(G.WithLearnRate(0.001), G.WithBatchSize(float64(batchSize)))
 	//defer func() {
 	//	vm.Close()
 	//	m.SetVM(nil)
