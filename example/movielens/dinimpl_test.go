@@ -30,7 +30,7 @@ func TestDinOnMovielens(t *testing.T) {
 			predBatchSize: 100,
 			batchSize:     200,
 			epochs:        200,
-			earlyStop:     1,
+			earlyStop:     20,
 		}
 		trainCtx := context.Background()
 		model, err = rcmd.Train(trainCtx, movielens, dinModel)
