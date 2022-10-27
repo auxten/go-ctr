@@ -19,9 +19,9 @@ import (
 
 const (
 	StageKey              = "stage"
-	ItemEmbDim            = 4
+	ItemEmbDim            = 10
 	ItemEmbWindow         = 5
-	UserBehaviorLen       = 25
+	UserBehaviorLen       = 10
 	userFeatureCacheSize  = 200000
 	itemFeatureCacheSize  = 2000000
 	userBehaviorCacheSize = userFeatureCacheSize * UserBehaviorLen
