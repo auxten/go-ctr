@@ -204,8 +204,8 @@ func NewDinNet(
 		att0: att0,
 		att1: att1,
 
-		d0: 0.0,
-		d1: 0.0,
+		d0: 0.005,
+		d1: 0.005,
 
 		mlp0: mlp0,
 		mlp1: mlp1,
