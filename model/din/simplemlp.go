@@ -125,8 +125,8 @@ func NewSimpleMLP(
 		cFeatureDim:   cFeatureDim,
 
 		g:    g,
-		d0:   0.0,
-		d1:   0.0,
+		d0:   0.003,
+		d1:   0.003,
 		mlp0: mlp0,
 		mlp1: mlp1,
 		mlp2: mlp2,
