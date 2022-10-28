@@ -23,9 +23,9 @@ type DinNet struct {
 	//input nodes
 	xUserProfile, xUbMatrix, xItemFeature, xCtxFeature *G.Node
 
-	mlp0, mlp1, mlp2 *G.Node   // weights of MLP layers
-	d0, d1           float64   // dropout probabilities
-	att0, att1       []*G.Node // weights of Attention layers
+	mlp0, mlp1, mlp2 *G.Node // weights of MLP layers
+	d0, d1           float64 // dropout probabilities
+	att0, att1       *G.Node // weights of Attention layers
 
 	out *G.Node
 }
@@ -86,7 +86,7 @@ func NewDinNetFromJson(data []byte) (din *DinNet, err error) {
 		uBehaviorDim  = m.UBehaviorDim
 		iFeatureDim   = m.IFeatureDim
 		cFeatureDim   = m.CFeatureDim
-		att0_0        = uBehaviorDim + iFeatureDim + uBehaviorSize*uBehaviorDim*iFeatureDim
+		att0_0        = uBehaviorDim + iFeatureDim + uBehaviorSize
 	)
 
 	// attention layer
@@ -180,7 +180,7 @@ func NewDinNet(
 	att0 := make([]*G.Node, uBehaviorSize)
 	att1 := make([]*G.Node, uBehaviorSize)
 	for i := 0; i < uBehaviorSize; i++ {
-		att0[i] = G.NewTensor(g, dt, 2, G.WithShape(uBehaviorDim+iFeatureDim+uBehaviorSize*uBehaviorDim*iFeatureDim, att0_1), G.WithName(fmt.Sprintf("att0-%d", i)), G.WithInit(G.Gaussian(0, 1)))
+		att0[i] = G.NewTensor(g, dt, 2, G.WithShape(uBehaviorDim+iFeatureDim+uBehaviorSize*uBehaviorDim, att0_1), G.WithName(fmt.Sprintf("att0-%d", i)), G.WithInit(G.Gaussian(0, 1)))
 		att1[i] = G.NewTensor(g, dt, 2, G.WithShape(att0_1, 1), G.WithName(fmt.Sprintf("att1-%d", i)), G.WithInit(G.Gaussian(0, 1)))
 	}
 
@@ -215,6 +215,7 @@ func NewDinNet(
 
 // Fwd performs the forward pass
 // xUserProfile: [batchSize, userProfileDim]
+// xUbMatrix: [batchSize, uBehaviorSize* uBehaviorDim]
 // xUserBehaviors: [batchSize, uBehaviorSize, uBehaviorDim]
 // xItemFeature: [batchSize, iFeatureDim]
 // xContextFeature: [batchSize, cFeatureDim]
@@ -224,29 +225,36 @@ func (din *DinNet) Fwd(xUserProfile, xUbMatrix, xItemFeature, xCtxFeature *G.Nod
 		return errors.Errorf("uBehaviorDim %d != iFeatureDim %d", uBehaviorDim, iFeatureDim)
 	}
 	xUserBehaviors := G.Must(G.Reshape(xUbMatrix, tensor.Shape{batchSize, uBehaviorSize, uBehaviorDim}))
+	xItemFeature3d := G.Must(G.Reshape(xItemFeature, tensor.Shape{batchSize, 1, iFeatureDim}))
 
-	// outProduct should computed batch by batch!!!!
-	outProdVecs := make([]*G.Node, batchSize)
-	for i := 0; i < batchSize; i++ {
-		// ubVec.Shape() = [uBehaviorSize * uBehaviorDim]
-		ubVec := G.Must(G.Slice(xUbMatrix, G.S(i)))
-		// item.Shape() = [iFeatureDim]
-		itemVec := G.Must(G.Slice(xItemFeature, G.S(i)))
-		// outProd.Shape() = [uBehaviorSize * uBehaviorDim, iFeatureDim]
-		outProd := G.Must(G.OuterProd(ubVec, itemVec))
-		outProdVecs[i] = G.Must(G.Reshape(outProd, tensor.Shape{uBehaviorSize * uBehaviorDim * iFeatureDim}))
-	}
-	//outProductsVec.Shape() = [batchSize * uBehaviorSize * uBehaviorDim * iFeatureDim]
-	outProductsVec := G.Must(G.Concat(0, outProdVecs...))
-	outProducts := G.Must(G.Reshape(outProductsVec, tensor.Shape{batchSize, uBehaviorSize * uBehaviorDim * iFeatureDim}))
+	// attention layer
+
+	// euclideanDistance: [batchSize, uBehaviorSize]
+	euclideanDistance := EucDistance(xUserBehaviors, xItemFeature3d)
+
+	//// outProduct should computed batch by batch!!!!
+	//outProdVecs := make([]*G.Node, batchSize)
+	//for i := 0; i < batchSize; i++ {
+	//	// ubVec.Shape() = [uBehaviorSize * uBehaviorDim]
+	//	ubVec := G.Must(G.Slice(xUbMatrix, G.S(i)))
+	//	// item.Shape() = [iFeatureDim]
+	//	itemVec := G.Must(G.Slice(xItemFeature, G.S(i)))
+	//	// outProd.Shape() = [uBehaviorSize * uBehaviorDim, iFeatureDim]
+	//	outProd := G.Must(G.OuterProd(ubVec, itemVec))
+	//	outProdVecs[i] = G.Must(G.Reshape(outProd, tensor.Shape{uBehaviorSize * uBehaviorDim * iFeatureDim}))
+	//}
+	////outProductsVec.Shape() = [batchSize * uBehaviorSize * uBehaviorDim * iFeatureDim]
+	//outProductsVec := G.Must(G.Concat(0, outProdVecs...))
+
+	//outProducts := G.Must(G.Reshape(outProductsVec, tensor.Shape{batchSize, uBehaviorSize * uBehaviorDim * iFeatureDim}))
 
 	actOuts := G.NewTensor(din.Graph(), dt, 2, G.WithShape(batchSize, uBehaviorDim), G.WithName("actOuts"), G.WithInit(G.Zeroes()))
 	for i := 0; i < uBehaviorSize; i++ {
 		// xUserBehaviors[:, i, :], ub.shape: [batchSize, uBehaviorDim]
 		ub := G.Must(G.Slice(xUserBehaviors, []tensor.Slice{nil, G.S(i)}...))
 		// Concat all xUserBehaviors[i], outProducts, xItemFeature
-		// actConcat.Shape() = [batchSize, uBehaviorDim+iFeatureDim+uBehaviorSize*uBehaviorDim*iFeatureDim]
-		actConcat := G.Must(G.Concat(1, ub, outProducts, xItemFeature))
+		// actConcat.Shape() = [batchSize, uBehaviorDim+iFeatureDim+uBehaviorSize]
+		actConcat := G.Must(G.Concat(1, ub, euclideanDistance, xItemFeature))
 		actOut := G.Must(G.BroadcastHadamardProd(
 			ub,
 			G.Must(G.Sigmoid(
