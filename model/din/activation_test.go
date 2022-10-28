@@ -55,10 +55,23 @@ func TestEucDistance(t *testing.T) {
 		So([]int(output.Shape()), ShouldResemble, []int{3, 2})
 		So(output.Value().Data(), ShouldResemble, []float64{1, 0, 1, 1, 0, 1})
 	})
-	Convey("euc distance 3 dim broadcast", t, func() {
+	Convey("euc distance 3 dim broadcast y", t, func() {
 		g := G.NewGraph()
 		x := G.NodeFromAny(g, tensor.New(tensor.WithShape(3, 2, 2), tensor.WithBacking([]float64{0, 2, 0, 0, -1, 1, -1, 1, 1, 2, 2, 2})), G.WithName("x"))
 		y := G.NodeFromAny(g, tensor.New(tensor.WithShape(3, 1, 2), tensor.WithBacking([]float64{0, 1, 0, 1, 1, 2})), G.WithName("y"))
+		output := EucDistance(x, y)
+		m := G.NewTapeMachine(g)
+		if err := m.RunAll(); err != nil {
+			t.Fatalf("%+v", err)
+		}
+		defer m.Close()
+		So([]int(output.Shape()), ShouldResemble, []int{3, 2})
+		So(output.Value().Data(), ShouldResemble, []float64{1, 1, 1, 1, 0, 1})
+	})
+	Convey("euc distance 3 dim broadcast x", t, func() {
+		g := G.NewGraph()
+		x := G.NodeFromAny(g, tensor.New(tensor.WithShape(3, 1, 2), tensor.WithBacking([]float64{0, 1, 0, 1, 1, 2})), G.WithName("x"))
+		y := G.NodeFromAny(g, tensor.New(tensor.WithShape(3, 2, 2), tensor.WithBacking([]float64{0, 2, 0, 0, -1, 1, -1, 1, 1, 2, 2, 2})), G.WithName("y"))
 		output := EucDistance(x, y)
 		m := G.NewTapeMachine(g)
 		if err := m.RunAll(); err != nil {
