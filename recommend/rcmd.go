@@ -3,8 +3,8 @@ package recommend
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/auxten/edgeRec/feature/embedding"
@@ -18,8 +18,9 @@ import (
 )
 
 const (
+	SampleAssembler       = 16
 	StageKey              = "stage"
-	ItemEmbDim            = 10
+	ItemEmbDim            = 16
 	ItemEmbWindow         = 5
 	UserBehaviorLen       = 10
 	userFeatureCacheSize  = 200000
@@ -31,9 +32,9 @@ var (
 	itemEmbeddingModel model.Model
 	itemEmbeddingMap   word2vec.EmbeddingMap
 	//TODO: maybe a switch to control whether to reuse training cache when predict
-	userFeatureCache  *ccache.Cache
-	itemFeatureCache  *ccache.Cache
-	userBehaviorCache *ccache.Cache
+	UserFeatureCache  *ccache.Cache
+	ItemFeatureCache  *ccache.Cache
+	UserBehaviorCache *ccache.Cache
 
 	// DefaultUserFeature and DefaultItemFeature are backup if not nil
 	//when user or item missing in database, use this to fill
@@ -56,6 +57,13 @@ const (
 type TrainSample struct {
 	Data ps.Samples
 	Info SampleInfo
+}
+
+type sampleVec struct {
+	vec    []float64
+	label  float64
+	iWidth int
+	uWidth int
 }
 
 type RecSys interface {
@@ -183,7 +191,6 @@ type Sample struct {
 }
 
 func Train(ctx context.Context, recSys RecSys, mlp Fitter) (model Predictor, err error) {
-	rand.Seed(42)
 	ctx = context.WithValue(ctx, StageKey, TrainStage)
 
 	if preTrain, ok := recSys.(PreTrainer); ok {
@@ -278,7 +285,7 @@ func BatchPredict(ctx context.Context, recSys Predictor, sampleKeys []Sample) (y
 		var (
 			xSlice []float64
 		)
-		xSlice, _, _, err = GetSampleVector(ctx, userFeatureCache, itemFeatureCache, userBehaviorCache, recSys, &sKey)
+		xSlice, _, _, err = GetSampleVector(ctx, UserFeatureCache, ItemFeatureCache, UserBehaviorCache, recSys, &sKey)
 		if err != nil {
 			if i == 0 {
 				log.Errorf("get sample vector error: %v", err)
@@ -318,20 +325,26 @@ func GetSample(recSys RecSys, ctx context.Context) (sample *TrainSample, err err
 		userFeatureWidth int
 		itemFeatureWidth int
 	)
-	userFeatureCache = ccache.New(
-		ccache.Configure().MaxSize(userFeatureCacheSize).ItemsToPrune(userFeatureCacheSize / 100),
-	)
-	itemFeatureCache = ccache.New(
-		ccache.Configure().MaxSize(itemFeatureCacheSize).ItemsToPrune(itemFeatureCacheSize / 100),
-	)
-	userBehaviorCache = ccache.New(
-		ccache.Configure().MaxSize(userBehaviorCacheSize).ItemsToPrune(userBehaviorCacheSize / 100),
-	)
+	if UserFeatureCache == nil {
+		UserFeatureCache = ccache.New(
+			ccache.Configure().MaxSize(userFeatureCacheSize).ItemsToPrune(userFeatureCacheSize / 100),
+		)
+	}
+	if ItemFeatureCache == nil {
+		ItemFeatureCache = ccache.New(
+			ccache.Configure().MaxSize(itemFeatureCacheSize).ItemsToPrune(itemFeatureCacheSize / 100),
+		)
+	}
+	if UserBehaviorCache == nil {
+		UserBehaviorCache = ccache.New(
+			ccache.Configure().MaxSize(userBehaviorCacheSize).ItemsToPrune(userBehaviorCacheSize / 100),
+		)
+	}
 
 	//defer func() {
-	//	userFeatureCache.Clear()
-	//	itemFeatureCache.Clear()
-	//	userBehaviorCache.Clear()
+	//	UserFeatureCache.Clear()
+	//	ItemFeatureCache.Clear()
+	//	UserBehaviorCache.Clear()
 	//}()
 
 	sampleGen, ok := recSys.(Trainer)
@@ -343,20 +356,39 @@ func GetSample(recSys RecSys, ctx context.Context) (sample *TrainSample, err err
 		panic(err)
 	}
 
-	sample = &TrainSample{}
-	for s := range sampleCh {
-		var (
-			vec            []float64
-			uWidth, iWidth int
-		)
-		vec, uWidth, iWidth, err = GetSampleVector(ctx, userFeatureCache, itemFeatureCache, userBehaviorCache, recSys, &s)
-		if err != nil {
-			log.Debugf("get sample vector failed: %v", err)
-			continue
-		}
+	var (
+		sampleVecCh = make(chan *sampleVec, 1000)
+		sampleVecWg sync.WaitGroup
+	)
 
+	for c := 0; c < SampleAssembler; c++ {
+		sampleVecWg.Add(1)
+		go func() {
+			for s := range sampleCh {
+				var (
+					err  error
+					sVec sampleVec
+				)
+				sVec.vec, sVec.uWidth, sVec.iWidth, err = GetSampleVector(ctx, UserFeatureCache, ItemFeatureCache, UserBehaviorCache, recSys, &s)
+				if err != nil {
+					log.Debugf("get sample vector error: %v", err)
+					continue
+				}
+				sVec.label = s.Label
+				sampleVecCh <- &sVec
+			}
+			sampleVecWg.Done()
+		}()
+	}
+	go func() {
+		sampleVecWg.Wait()
+		close(sampleVecCh)
+	}()
+
+	sample = &TrainSample{}
+	for sv := range sampleVecCh {
 		if userFeatureWidth == 0 {
-			userFeatureWidth = uWidth
+			userFeatureWidth = sv.uWidth
 			sample.Info.UserProfileRange[0] = 0
 			sample.Info.UserProfileRange[1] = userFeatureWidth
 			sample.Info.UserBehaviorRange[0] = sample.Info.UserProfileRange[1]
@@ -365,36 +397,36 @@ func GetSample(recSys RecSys, ctx context.Context) (sample *TrainSample, err err
 			sample.Info.ItemFeatureRange[0] = sample.Info.UserBehaviorRange[1]
 			sample.Info.ItemFeatureRange[1] = sample.Info.UserBehaviorRange[1] + ItemEmbDim
 		}
-		if uWidth != userFeatureWidth {
+		if sv.uWidth != userFeatureWidth {
 			err = fmt.Errorf("user feature length mismatch: %v:%v",
-				userFeatureWidth, uWidth)
+				userFeatureWidth, sv.uWidth)
 			return
 		}
 
 		if itemFeatureWidth == 0 {
-			itemFeatureWidth = iWidth
+			itemFeatureWidth = sv.iWidth
 			// non embedding item feature is treated as ctx feature
 			sample.Info.CtxFeatureRange[0] = sample.Info.ItemFeatureRange[1]
 			sample.Info.CtxFeatureRange[1] = sample.Info.ItemFeatureRange[1] + itemFeatureWidth
 		}
-		if iWidth != itemFeatureWidth {
+		if sv.iWidth != itemFeatureWidth {
 			err = fmt.Errorf("item feature length mismatch: %v:%v",
-				itemFeatureWidth, iWidth)
+				itemFeatureWidth, sv.iWidth)
 			return
 		}
 
 		if sampleWidth == 0 {
-			sampleWidth = len(vec)
+			sampleWidth = len(sv.vec)
 		} else {
-			if len(vec) != sampleWidth {
-				err = fmt.Errorf("sample width mismatch: %v:%v", sampleWidth, len(vec))
+			if len(sv.vec) != sampleWidth {
+				err = fmt.Errorf("sample width mismatch: %v:%v", sampleWidth, len(sv.vec))
 				return
 			}
 		}
 
 		sample.Data = append(sample.Data, ps.Sample{
-			Input:    vec,
-			Response: []float64{s.Label},
+			Input:    sv.vec,
+			Response: []float64{sv.label},
 		})
 		if len(sample.Data)%1000 == 0 {
 			log.Infof("sample size: %d", len(sample.Data))
