@@ -171,16 +171,16 @@ func NewDinNet(
 	g := G.NewGraph()
 	// attention layer
 	att0 := G.NewTensor(g, dt, 2, G.WithShape(1, uBehaviorSize), G.WithName("att0"), G.WithInit(G.ValuesOf(float64(1.0/uBehaviorSize))))
-	//att1 := G.NewTensor(g, dt, 3, G.WithShape(uBehaviorSize, att0_1, 1), G.WithName("att1"), G.WithInit(G.Gaussian(0, 1)))
+	//att1 := G.NewTensor(g, dt, 3, G.WithShape(uBehaviorSize, att0_1, 1), G.WithName("att1"), G.WithInit(G.HeN(1.0)))
 
 	// user behaviors are represented as a sequence of item embeddings. Before
 	// being fed into the MLP, we need to flatten the sequence into a single with
 	// sum pooling with Attention as the weights which is the key point of DIN model.
-	mlp0 := G.NewMatrix(g, dt, G.WithShape(uProfileDim+uBehaviorDim+iFeatureDim+cFeatureDim, mlp0_1), G.WithName("mlp0"), G.WithInit(G.Gaussian(0, 1)))
+	mlp0 := G.NewMatrix(g, dt, G.WithShape(uProfileDim+uBehaviorDim+iFeatureDim+cFeatureDim, mlp0_1), G.WithName("mlp0"), G.WithInit(G.HeN(1.0)))
 
-	mlp1 := G.NewMatrix(g, dt, G.WithShape(mlp0_1, mlp1_2), G.WithName("mlp1"), G.WithInit(G.Gaussian(0, 1)))
+	mlp1 := G.NewMatrix(g, dt, G.WithShape(mlp0_1, mlp1_2), G.WithName("mlp1"), G.WithInit(G.HeN(1.0)))
 
-	mlp2 := G.NewMatrix(g, dt, G.WithShape(mlp1_2, 1), G.WithName("mlp2"), G.WithInit(G.Gaussian(0, 1)))
+	mlp2 := G.NewMatrix(g, dt, G.WithShape(mlp1_2, 1), G.WithName("mlp2"), G.WithInit(G.HeN(1.0)))
 
 	return &DinNet{
 		uProfileDim:   uProfileDim,
