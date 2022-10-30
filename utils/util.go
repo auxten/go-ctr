@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"math"
 	"sort"
+	"strconv"
+	"strings"
 
 	"gonum.org/v1/gonum/integrate"
 	"gonum.org/v1/gonum/stat"
@@ -61,4 +63,29 @@ func TopNOccurrences(s []string, n int) []KeyCnt {
 func RocAuc(label []bool, y []float64) float64 {
 	tpr, fpr, _ := stat.ROC(nil, y, label, nil)
 	return integrate.Trapezoidal(fpr, tpr)
+}
+
+func ParseInt64Seq(s string) []int64 {
+	var (
+		seq []int64
+	)
+	for _, str := range strings.Split(s, ",") {
+		if str == "" {
+			continue
+		}
+		i, err := strconv.ParseInt(str, 10, 64)
+		if err != nil {
+			panic(err)
+		}
+		seq = append(seq, i)
+	}
+	return seq
+}
+
+func Int64SeqToIntSeq(seq []int64) []int {
+	result := make([]int, len(seq))
+	for i, v := range seq {
+		result[i] = int(v)
+	}
+	return result
 }

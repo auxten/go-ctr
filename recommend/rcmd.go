@@ -2,14 +2,14 @@ package recommend
 
 import (
 	"context"
-	"math/rand"
+	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/auxten/edgeRec/feature/embedding"
 	"github.com/auxten/edgeRec/feature/embedding/model"
 	"github.com/auxten/edgeRec/feature/embedding/model/word2vec"
-	"github.com/auxten/edgeRec/nn/base"
 	"github.com/auxten/edgeRec/ps"
 	"github.com/auxten/edgeRec/utils"
 	"github.com/karlseguin/ccache/v2"
@@ -18,18 +18,31 @@ import (
 )
 
 const (
-	StageKey             = "stage"
-	ItemEmbDim           = 10
-	ItemEmbWindow        = 5
-	userFeatureCacheSize = 200000
-	itemFeatureCacheSize = 2000000
+	SampleAssembler       = 16
+	StageKey              = "stage"
+	ItemEmbDim            = 16
+	ItemEmbWindow         = 5
+	UserBehaviorLen       = 10
+	userFeatureCacheSize  = 200000
+	itemFeatureCacheSize  = 2000000
+	userBehaviorCacheSize = userFeatureCacheSize * UserBehaviorLen
 )
 
 var (
 	itemEmbeddingModel model.Model
 	itemEmbeddingMap   word2vec.EmbeddingMap
-	DebugUserId        int
-	DebugItemId        int
+	//TODO: maybe a switch to control whether to reuse training cache when predict
+	UserFeatureCache  *ccache.Cache
+	ItemFeatureCache  *ccache.Cache
+	UserBehaviorCache *ccache.Cache
+
+	// DefaultUserFeature and DefaultItemFeature are backup if not nil
+	//when user or item missing in database, use this to fill
+	DefaultUserFeature []float64
+	DefaultItemFeature []float64
+
+	DebugUserId int
+	DebugItemId int
 )
 
 type Tensor []float64
@@ -41,45 +54,69 @@ const (
 	PredictStage
 )
 
+type TrainSample struct {
+	Data ps.Samples
+	Info SampleInfo
+}
+
+type sampleVec struct {
+	vec    []float64
+	label  float64
+	iWidth int
+	uWidth int
+}
+
 type RecSys interface {
-	UserFeaturer
-	ItemFeaturer
+	BasicFeatureProvider
 	Trainer
-	FeatureOverview
 }
 
 type Predictor interface {
+	BasicFeatureProvider
+	PredictAbstract
+}
+
+type BasicFeatureProvider interface {
 	UserFeaturer
 	ItemFeaturer
-	base.Predicter
+}
+
+type PredictAbstract interface {
+	Predict(X mat.Matrix, Y mat.Mutable) *mat.Dense
 }
 
 type Trainer interface {
 	SampleGenerator(context.Context) (<-chan Sample, error)
 }
 
-type UserFeaturer interface {
-	GetUserFeature(context.Context, int) (Tensor, error)
-}
-
-//UserBehavior interface is used to get user behavior feature.
-// typically, it is user's clicked/bought/liked item id list ordered by time asc.
-// During training, you should limit the seq to avoid time travel,
-//	maxPk or maxTs could be used here:
-//	 - maxPk is the max primary key of user behavior table.
-//	 - maxTs is the max timestamp of user behavior table.
-//	 - maxLen is the max length of user behavior seq, if total len is
-// 		greater than maxLen, the seq will be truncated from the tail.
-//  	which is latest maxLen items.
-// specially, -1 means no limit.
-//During prediction, you should use the latest user behavior seq.
-type UserBehavior interface {
-	GetUserBehavior(ctx context.Context, userId int,
-		maxLen int, maxPk int, maxTs int) (itemSeq []int, err error)
+type Fitter interface {
+	Fit(sample *TrainSample) (PredictAbstract, error)
 }
 
 type ItemFeaturer interface {
 	GetItemFeature(context.Context, int) (Tensor, error)
+}
+
+type UserFeaturer interface {
+	GetUserFeature(context.Context, int) (Tensor, error)
+}
+
+// UserBehavior interface is used to get user behavior feature.
+// typically, it is user's clicked/bought/liked item id list ordered by time desc.
+// During training, you should limit the seq to avoid time travel,
+//
+//		maxPk or maxTs could be used here:
+//		 - maxPk is the max primary key of user behavior table.
+//		 - maxTs is the max timestamp of user behavior table.
+//		 - maxLen is the max length of user behavior seq, if total len is
+//			greater than maxLen, the seq will be truncated from the tail.
+//	 	which is latest maxLen items.
+//
+// specially, -1 means no limit.
+// During prediction, you should use the latest user behavior seq.
+type UserBehavior interface {
+	GetUserBehavior(ctx context.Context, userId int,
+		maxLen int64, maxPk int64, maxTs int64) (itemSeq []int, err error)
 }
 
 // ItemEmbedding is an interface used to generate item embedding with item2vec model
@@ -147,13 +184,13 @@ type ItemScore struct {
 }
 
 type Sample struct {
-	UserId int     `json:"userId"`
-	ItemId int     `json:"itemId"`
-	Label  float64 `json:"label"`
+	UserId    int     `json:"userId"`
+	ItemId    int     `json:"itemId"`
+	Label     float64 `json:"label"`
+	Timestamp int64   `json:"timestamp"`
 }
 
-func Train(ctx context.Context, recSys RecSys, mlp base.Fiter) (model Predictor, err error) {
-	rand.Seed(0)
+func Train(ctx context.Context, recSys RecSys, mlp Fitter) (model Predictor, err error) {
 	ctx = context.WithValue(ctx, StageKey, TrainStage)
 
 	if preTrain, ok := recSys.(PreTrainer); ok {
@@ -178,75 +215,55 @@ func Train(ctx context.Context, recSys RecSys, mlp base.Fiter) (model Predictor,
 	}
 
 	trainSample, err := GetSample(recSys, ctx)
-	sampleLen := len(trainSample)
-	sampleDense := mat.NewDense(sampleLen, len(trainSample[0].Input), nil)
-	for i, sample := range trainSample {
-		sampleDense.SetRow(i, sample.Input)
-	}
-	yClass := mat.NewDense(sampleLen, 1, nil)
-	for i, sample := range trainSample {
-		yClass.Set(i, 0, sample.Response[0])
-	}
+	sampleLen := len(trainSample.Data)
 
 	// start training
 	log.Infof("\nstart training with %d samples\n", sampleLen)
-	mlp.Fit(sampleDense, yClass)
+
+	pred, err := mlp.Fit(trainSample)
+	if err != nil {
+		log.Errorf("fit error: %v", err)
+		return
+	}
 	type modelImpl struct {
 		UserFeaturer
 		ItemFeaturer
-		base.Predicter
-		FeatureOverview
+		PredictAbstract
 	}
 	model = &modelImpl{
 		UserFeaturer:    recSys,
 		ItemFeaturer:    recSys,
-		Predicter:       mlp.(base.Predicter),
-		FeatureOverview: recSys,
+		PredictAbstract: pred,
 	}
 
 	return
 }
 
 func Rank(ctx context.Context, recSys Predictor, userId int, itemIds []int) (itemScores []ItemScore, err error) {
-	ctx = context.WithValue(ctx, StageKey, PredictStage)
-	if preRanker, ok := recSys.(PreRanker); ok {
-		err = preRanker.PreRank(ctx)
-		if err != nil {
-			log.Errorf("pre rank error: %v", err)
-			return
+	sampleKeys := make([]Sample, len(itemIds))
+	for i, itemId := range itemIds {
+		sampleKeys[i] = Sample{
+			UserId:    userId,
+			ItemId:    itemId,
+			Timestamp: time.Now().Unix(),
 		}
 	}
-	var (
-		userFeature, itemFeature Tensor
-	)
-	itemScores = make([]ItemScore, len(itemIds))
-	userFeature, err = recSys.GetUserFeature(ctx, userId)
+	y, err := BatchPredict(ctx, recSys, sampleKeys)
 	if err != nil {
-		log.Errorf("get user feature error: %v", err)
 		return
 	}
+	itemScores = make([]ItemScore, len(itemIds))
 	for i, itemId := range itemIds {
-		itemFeature, err = recSys.GetItemFeature(ctx, itemId)
-		if err != nil {
-			log.Infof("get item feature failed: %v", err)
-			return
-		}
-		xSlice := utils.ConcatSlice(userFeature, itemFeature)
-		x := mat.NewDense(1, len(xSlice), xSlice)
-		y := mat.NewDense(1, 1, nil)
-
-		score := recSys.Predict(x, y)
-		itemScores[i] = ItemScore{itemId, score.At(0, 0)}
-		if (DebugItemId == 0 || DebugItemId == itemIds[i]) &&
-			(DebugUserId == 0 || DebugUserId == userId) {
-			log.Infof("user %d: %v\nitem %d: %v\nscore %f",
-				userId, userFeature, itemIds[i], itemFeature, score.At(0, 0))
+		itemScores[i] = ItemScore{
+			ItemId: itemId,
+			Score:  y.At(i, 0),
 		}
 	}
+
 	return
 }
 
-func BatchPredict(ctx context.Context, recSys Predictor, userAndItems [][2]int) (y *mat.Dense, err error) {
+func BatchPredict(ctx context.Context, recSys Predictor, sampleKeys []Sample) (y *mat.Dense, err error) {
 	ctx = context.WithValue(ctx, StageKey, PredictStage)
 	if preRanker, ok := recSys.(PreRanker); ok {
 		err = preRanker.PreRank(ctx)
@@ -256,27 +273,30 @@ func BatchPredict(ctx context.Context, recSys Predictor, userAndItems [][2]int) 
 		}
 	}
 
-	y = mat.NewDense(len(userAndItems), 1, nil)
-	var x *mat.Dense
-	for i, userAndItem := range userAndItems {
-		userId := userAndItem[0]
-		itemId := userAndItem[1]
+	y = mat.NewDense(len(sampleKeys), 1, nil)
+	var (
+		x          *mat.Dense
+		zeroSliceX []float64
+		debugIds   = make([]int, 0)
+	)
+
+	for i, sKey := range sampleKeys {
 		var (
-			userFeature, itemFeature Tensor
+			xSlice []float64
 		)
-		userFeature, err = recSys.GetUserFeature(ctx, userId)
+		xSlice, _, _, err = GetSampleVector(ctx, UserFeatureCache, ItemFeatureCache, recSys, &sKey)
 		if err != nil {
-			log.Errorf("get user feature error: %v", err)
-			continue
+			if i == 0 {
+				log.Errorf("get sample vector error: %v", err)
+				return
+			} else {
+				_, col := x.Dims()
+				zeroSliceX = make([]float64, col)
+				xSlice = zeroSliceX
+			}
 		}
-		itemFeature, err = recSys.GetItemFeature(ctx, itemId)
-		if err != nil {
-			log.Infof("get item feature failed: %v", err)
-			continue
-		}
-		xSlice := utils.ConcatSlice(userFeature, itemFeature)
 		if i == 0 {
-			x = mat.NewDense(len(userAndItems), len(xSlice), nil)
+			x = mat.NewDense(len(sampleKeys), len(xSlice), nil)
 		}
 
 		_, xCol := x.Dims()
@@ -285,23 +305,41 @@ func BatchPredict(ctx context.Context, recSys Predictor, userAndItems [][2]int) 
 			return
 		}
 		x.SetRow(i, xSlice)
+		if DebugItemId == sKey.ItemId &&
+			(DebugUserId == 0 || DebugUserId == sKey.UserId) {
+			log.Infof("user %d: item %d: feature %v", sKey.UserId, sKey.ItemId, xSlice)
+			debugIds = append(debugIds, i)
+		}
 	}
 	recSys.Predict(x, y)
+	for _, i := range debugIds {
+		log.Infof("user %d: item %d: score %v", sampleKeys[i].UserId, sampleKeys[i].ItemId, y.At(i, 0))
+	}
 	return
 }
 
-func GetSample(recSys RecSys, ctx context.Context) (sample ps.Samples, err error) {
+func GetSample(recSys RecSys, ctx context.Context) (sample *TrainSample, err error) {
 	var (
-		userFeatureWidth, itemFeatureWidth int
-		userFeatureCache                   *ccache.Cache
-		itemFeatureCache                   *ccache.Cache
+		sampleWidth      int
+		userFeatureWidth int
+		itemFeatureWidth int
 	)
-	userFeatureCache = ccache.New(
-		ccache.Configure().MaxSize(userFeatureCacheSize).ItemsToPrune(userFeatureCacheSize / 100),
-	)
-	itemFeatureCache = ccache.New(
-		ccache.Configure().MaxSize(itemFeatureCacheSize).ItemsToPrune(itemFeatureCacheSize / 100),
-	)
+	if UserFeatureCache == nil {
+		UserFeatureCache = ccache.New(
+			ccache.Configure().MaxSize(userFeatureCacheSize).ItemsToPrune(userFeatureCacheSize / 100),
+		)
+	}
+	if ItemFeatureCache == nil {
+		ItemFeatureCache = ccache.New(
+			ccache.Configure().MaxSize(itemFeatureCacheSize).ItemsToPrune(itemFeatureCacheSize / 100),
+		)
+	}
+
+	//defer func() {
+	//	UserFeatureCache.Clear()
+	//	ItemFeatureCache.Clear()
+	//	UserBehaviorCache.Clear()
+	//}()
 
 	sampleGen, ok := recSys.(Trainer)
 	if !ok {
@@ -312,61 +350,161 @@ func GetSample(recSys RecSys, ctx context.Context) (sample ps.Samples, err error
 		panic(err)
 	}
 
-	for s := range sampleCh {
-		var (
-			user, item *ccache.Item
-		)
-		userIdStr := strconv.Itoa(s.UserId)
-		user, err = userFeatureCache.Fetch(userIdStr, time.Hour*24, func() (cItem interface{}, err error) {
-			cItem, err = recSys.GetUserFeature(ctx, s.UserId)
-			return
-		})
-		if err != nil {
-			continue
-		}
-		userFeature := user.Value().(Tensor)
+	var (
+		sampleVecCh = make(chan *sampleVec, 1000)
+		sampleVecWg sync.WaitGroup
+	)
+
+	for c := 0; c < SampleAssembler; c++ {
+		sampleVecWg.Add(1)
+		go func() {
+			for s := range sampleCh {
+				var (
+					err  error
+					sVec sampleVec
+				)
+				sVec.vec, sVec.uWidth, sVec.iWidth, err = GetSampleVector(ctx, UserFeatureCache, ItemFeatureCache, recSys, &s)
+				if err != nil {
+					log.Debugf("get sample vector error: %v", err)
+					continue
+				}
+				sVec.label = s.Label
+				sampleVecCh <- &sVec
+			}
+			sampleVecWg.Done()
+		}()
+	}
+	go func() {
+		sampleVecWg.Wait()
+		close(sampleVecCh)
+	}()
+
+	sample = &TrainSample{}
+	for sv := range sampleVecCh {
 		if userFeatureWidth == 0 {
-			userFeatureWidth = len(userFeature)
+			userFeatureWidth = sv.uWidth
+			sample.Info.UserProfileRange[0] = 0
+			sample.Info.UserProfileRange[1] = userFeatureWidth
+			sample.Info.UserBehaviorRange[0] = sample.Info.UserProfileRange[1]
+			sample.Info.UserBehaviorRange[1] = sample.Info.UserProfileRange[1] + ItemEmbDim*UserBehaviorLen
+			// item feature here is only embeddings
+			sample.Info.ItemFeatureRange[0] = sample.Info.UserBehaviorRange[1]
+			sample.Info.ItemFeatureRange[1] = sample.Info.UserBehaviorRange[1] + ItemEmbDim
 		}
-		if len(userFeature) != userFeatureWidth {
-			log.Errorf("user feature length mismatch: %v:%v",
-				userFeatureWidth, len(userFeature))
-			continue
-		}
-
-		itemIdStr := strconv.Itoa(s.ItemId)
-		item, err = itemFeatureCache.Fetch(itemIdStr, time.Hour*24, func() (cItem interface{}, err error) {
-			cItem, err = recSys.GetItemFeature(ctx, s.ItemId)
+		if sv.uWidth != userFeatureWidth {
+			err = fmt.Errorf("user feature length mismatch: %v:%v",
+				userFeatureWidth, sv.uWidth)
 			return
-		})
-		if err != nil {
-			continue
 		}
-		itemFeature := item.Value().(Tensor)
 
-		// if ItemEmbedding interface is implemented, use item embedding
-		if _, ok := recSys.(ItemEmbedding); ok {
-			if itemEmb, ok := itemEmbeddingMap.Get(strconv.Itoa(s.ItemId)); ok {
-				itemFeature = append(itemFeature, itemEmb...)
-			} else {
-				var zeroItemEmb [ItemEmbDim]float64
-				itemFeature = append(itemFeature, zeroItemEmb[:]...)
+		if itemFeatureWidth == 0 {
+			itemFeatureWidth = sv.iWidth
+			// non embedding item feature is treated as ctx feature
+			sample.Info.CtxFeatureRange[0] = sample.Info.ItemFeatureRange[1]
+			sample.Info.CtxFeatureRange[1] = sample.Info.ItemFeatureRange[1] + itemFeatureWidth
+		}
+		if sv.iWidth != itemFeatureWidth {
+			err = fmt.Errorf("item feature length mismatch: %v:%v",
+				itemFeatureWidth, sv.iWidth)
+			return
+		}
+
+		if sampleWidth == 0 {
+			sampleWidth = len(sv.vec)
+		} else {
+			if len(sv.vec) != sampleWidth {
+				err = fmt.Errorf("sample width mismatch: %v:%v", sampleWidth, len(sv.vec))
+				return
 			}
 		}
-		if itemFeatureWidth == 0 {
-			itemFeatureWidth = len(itemFeature)
-		}
-		if len(itemFeature) != itemFeatureWidth {
-			log.Errorf("item feature length mismatch: %v:%v",
-				itemFeatureWidth, len(itemFeature))
-			continue
-		}
 
-		sample = append(sample, ps.Sample{Input: utils.ConcatSlice(userFeature, itemFeature), Response: Tensor{s.Label}})
-		if len(sample)%100 == 0 {
-			log.Infof("sample size: %d", len(sample))
+		sample.Data = append(sample.Data, ps.Sample{
+			Input:    sv.vec,
+			Response: []float64{sv.label},
+		})
+		if len(sample.Data)%1000 == 0 {
+			log.Infof("sample size: %d, uc: %d, ic: %d", len(sample.Data),
+				UserFeatureCache.ItemCount(),
+				ItemFeatureCache.ItemCount(),
+			)
 		}
 	}
+
+	return
+}
+
+func GetSampleVector(ctx context.Context,
+	userFeatureCache *ccache.Cache, itemFeatureCache *ccache.Cache,
+	featureProvider BasicFeatureProvider, sampleKey *Sample,
+) (vec []float64, userFeatureWidth int, itemFeatureWidth int, err error) {
+	var (
+		zeroItemEmb       [ItemEmbDim]float64
+		zeroUserBehaviors [ItemEmbDim * UserBehaviorLen]float64
+
+		user, item *ccache.Item
+	)
+	userIdStr := strconv.Itoa(sampleKey.UserId)
+	user, err = userFeatureCache.Fetch(userIdStr, time.Hour*24, func() (ci interface{}, err error) {
+		ci, err = featureProvider.GetUserFeature(ctx, sampleKey.UserId)
+		return
+	})
+	if err != nil {
+		return
+	}
+	userFeature := user.Value().(Tensor)
+	userFeatureWidth = len(userFeature)
+
+	itemIdStr := strconv.Itoa(sampleKey.ItemId)
+	item, err = itemFeatureCache.Fetch(itemIdStr, time.Hour*24, func() (ci interface{}, err error) {
+		ci, err = featureProvider.GetItemFeature(ctx, sampleKey.ItemId)
+		return
+	})
+	if err != nil {
+		return
+	}
+	itemFeature := item.Value().(Tensor)
+	itemFeatureWidth = len(itemFeature)
+
+	// if ItemEmbedding interface is implemented, use item embedding,
+	// 	else use zero embedding.
+	var (
+		itemEmb       = zeroItemEmb[:]
+		userBehaviors = zeroUserBehaviors[:]
+		ok            bool
+	)
+	if len(itemEmbeddingMap) != 0 {
+		if itemEmb, ok = itemEmbeddingMap.Get(strconv.Itoa(sampleKey.ItemId)); !ok {
+			itemEmb = zeroItemEmb[:]
+			log.Debugf("item embedding not found: %d, using zeros", sampleKey.ItemId)
+		}
+		// if ItemEmbedding and UserBehavior interface are both implemented,
+		// use itemSeq embeddings got from GetUserBehavior as user behavior,
+		//	else use zero embedding.
+		if recSysUb, ok := featureProvider.(UserBehavior); ok {
+			getUbfunc := func(userId int, maxLen int64, maxPk int64, maxTs int64) (ubTensor Tensor, err error) {
+				itemSeq, err := recSysUb.GetUserBehavior(
+					ctx, userId, maxLen, maxPk, maxTs)
+				if err != nil {
+					return
+				}
+				//query items embedding, fill them into user behavior
+				ubTensor = make(Tensor, ItemEmbDim*UserBehaviorLen)
+				for i, itemId := range itemSeq {
+					if itemEmb, ok := itemEmbeddingMap.Get(strconv.Itoa(itemId)); ok {
+						copy(ubTensor[i*ItemEmbDim:], itemEmb)
+					}
+				}
+				return
+			}
+			userBehaviors, err = getUbfunc(sampleKey.UserId, UserBehaviorLen, -1, sampleKey.Timestamp)
+			if err != nil {
+				err = fmt.Errorf("get user behavior error: %v", err)
+				return
+			}
+		}
+	}
+
+	vec = utils.ConcatSlice(userFeature, userBehaviors, itemEmb, itemFeature)
 
 	return
 }

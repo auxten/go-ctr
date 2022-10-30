@@ -18,26 +18,27 @@ func TestFeatureEngineer(t *testing.T) {
 	rcmd.DebugItemId = 588
 
 	var (
-		recSys = &RecSysImpl{
+		recSys = &MovielensRec{
 			DataPath:  "movielens.db",
 			SampleCnt: 79948,
 		}
 		model rcmd.Predictor
 		err   error
 	)
-	fiter := nn.NewMLPClassifier(
+
+	fitter := nn.NewMLPClassifier(
 		[]int{100},
 		"relu", "adam", 1e-5,
 	)
-	fiter.Verbose = true
-	fiter.MaxIter = 10
-	fiter.LearningRate = "adaptive"
-	fiter.LearningRateInit = .0025
+	fitter.Verbose = true
+	fitter.MaxIter = 200
+	fitter.LearningRate = "adaptive"
+	fitter.LearningRateInit = .0025
 
 	trainCtx := context.Background()
 	log.SetLevel(log.DebugLevel)
 	Convey("feature engineering", t, func() {
-		model, err = rcmd.Train(trainCtx, recSys, fiter)
+		model, err = rcmd.Train(trainCtx, recSys, &fitWrap{model: fitter})
 		So(err, ShouldBeNil)
 	})
 
@@ -78,25 +79,26 @@ func TestFeatureEngineer(t *testing.T) {
 	Convey("test set ROC AUC", t, func() {
 		testCount := 20600
 		rows, err := db.Query(
-			"SELECT userId, movieId, rating FROM ratings_test ORDER BY timestamp, userId ASC LIMIT ?", testCount)
+			"SELECT userId, movieId, rating, timestamp FROM ratings_test ORDER BY timestamp, userId ASC LIMIT ?", testCount)
 		So(err, ShouldBeNil)
 		var (
-			userId       int
-			itemId       int
-			rating       float64
-			yTrue        = mat.NewDense(testCount, 1, nil)
-			userAndItems [][2]int
+			userId     int
+			itemId     int
+			rating     float64
+			timestamp  int64
+			yTrue      = mat.NewDense(testCount, 1, nil)
+			sampleKeys = make([]rcmd.Sample, 0, testCount)
 		)
 		for i := 0; rows.Next(); i++ {
-			err = rows.Scan(&userId, &itemId, &rating)
+			err = rows.Scan(&userId, &itemId, &rating, &timestamp)
 			if err != nil {
 				t.Errorf("scan error: %v", err)
 			}
 			yTrue.Set(i, 0, BinarizeLabel(rating))
-			userAndItems = append(userAndItems, [2]int{userId, itemId})
+			sampleKeys = append(sampleKeys, rcmd.Sample{userId, itemId, 0, timestamp})
 		}
 		batchPredictCtx := context.Background()
-		yPred, err := rcmd.BatchPredict(batchPredictCtx, model, userAndItems)
+		yPred, err := rcmd.BatchPredict(batchPredictCtx, model, sampleKeys)
 		So(err, ShouldBeNil)
 		rocAuc := metrics.ROCAUCScore(yTrue, yPred, "", nil)
 		rowCount, _ := yTrue.Dims()

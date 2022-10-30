@@ -11,7 +11,7 @@ import (
 	"sync"
 
 	"github.com/auxten/edgeRec/feature"
-	"github.com/auxten/edgeRec/nn/base"
+	"github.com/auxten/edgeRec/feature/ubcache"
 	rcmd "github.com/auxten/edgeRec/recommend"
 	"github.com/auxten/edgeRec/utils"
 	_ "github.com/mattn/go-sqlite3"
@@ -26,23 +26,25 @@ var (
 
 func initDb(dbPath string) (err error) {
 	dbOnce.Do(func() {
-		db, err = sql.Open("sqlite3", dbPath)
+		db, err = sql.Open("sqlite3", fmt.Sprintf("file:%s?cache=shared&mode=ro", dbPath))
 		if err != nil {
 			log.Errorf("failed to open db: %v", err)
 			return
 		}
+		db.SetMaxOpenConns(16)
 	})
 	return
 }
 
-type RecSysImpl struct {
+type MovielensRec struct {
 	DataPath   string
 	SampleCnt  int
-	Neural     base.Predicter
 	mRatingMap map[int][2]float64
+	ubcTrain   *ubcache.UserBehaviorCache
+	ubcPredict *ubcache.UserBehaviorCache
 }
 
-func (recSys *RecSysImpl) ItemSeqGenerator(ctx context.Context) (ret <-chan string, err error) {
+func (recSys *MovielensRec) ItemSeqGenerator(ctx context.Context) (ret <-chan string, err error) {
 	var (
 		wg sync.WaitGroup
 	)
@@ -82,14 +84,13 @@ func (recSys *RecSysImpl) ItemSeqGenerator(ctx context.Context) (ret <-chan stri
 	return
 }
 
-func (recSys *RecSysImpl) GetItemFeature(ctx context.Context, itemId int) (tensor rcmd.Tensor, err error) {
+func (recSys *MovielensRec) GetItemFeature(ctx context.Context, itemId int) (tensor rcmd.Tensor, err error) {
 	// get movie avg rating and rating count
 	var (
 		rows *sql.Rows
 	)
 
-	rows, err = db.Query(`select m."movieId" itemId,
-					   "title"     itemTitle,
+	rows, err = db.Query(`select "title"     itemTitle,
 					   "genres"    itemGenres
 				from movies m
 				WHERE m.movieId = ?`, itemId)
@@ -100,13 +101,13 @@ func (recSys *RecSysImpl) GetItemFeature(ctx context.Context, itemId int) (tenso
 	defer rows.Close()
 	if rows.Next() {
 		var (
-			itemId, movieYear     int
+			movieYear             int
 			itemTitle, itemGenres string
 			avgRating, cntRating  float64
 			GenreTensor           [50]float64 // 5 * 10
 		)
-		if err = rows.Scan(&itemId, &itemTitle, &itemGenres); err != nil {
-			log.Errorf("failed to scan movieId: %v", err)
+		if err = rows.Scan(&itemTitle, &itemGenres); err != nil {
+			log.Errorf("failed to scan item %d: %v", itemId, err)
 			return
 		}
 		// regex match year from itemTitle
@@ -141,11 +142,11 @@ func (recSys *RecSysImpl) GetItemFeature(ctx context.Context, itemId int) (tenso
 	}
 }
 
-func (recSys *RecSysImpl) GetUserFeature(ctx context.Context, userId int) (tensor rcmd.Tensor, err error) {
+func (recSys *MovielensRec) GetUserFeature(ctx context.Context, userId int) (tensor rcmd.Tensor, err error) {
 	var (
 		tableName        string
-		rows, rows2      *sql.Rows
-		genres           string
+		rows             *sql.Rows
+		ugenres          sql.NullString
 		avgRating        sql.NullFloat64
 		cntRating        sql.NullFloat64
 		top5GenresTensor [50]float64
@@ -154,65 +155,51 @@ func (recSys *RecSysImpl) GetUserFeature(ctx context.Context, userId int) (tenso
 	stage := ctx.Value(rcmd.StageKey).(rcmd.Stage)
 	switch stage {
 	case rcmd.TrainStage:
-		tableName = "ratings_train"
+		tableName = "user_feature_train"
 	case rcmd.PredictStage:
-		tableName = "ratings_test"
+		tableName = "user_feature_test"
 	default:
 		panic("unknown stage")
 	}
 
-	rows, err = db.Query(`select 
-                           group_concat(genres) as ugenres
-                    from `+tableName+` r2
-                             left join movies t2 on r2.movieId = t2.movieId
-                    where userId = ? and
-                    		r2.rating > 3.5
-                    group by userId`, userId)
+	rows, err = db.Query(fmt.Sprintf(
+		`select ugenres, avgRating, cntRating from %s where userId = ?`, tableName), userId)
 	if err != nil {
 		log.Errorf("failed to query ratings: %v", err)
 		return
 	}
 	defer rows.Close()
-	for rows.Next() {
-		if err = rows.Scan(&genres); err != nil {
-			log.Errorf("failed to scan movieId: %v", err)
+	if rows.Next() {
+		if err = rows.Scan(&ugenres, &avgRating, &cntRating); err != nil {
+			log.Errorf("failed to scan user: %d feature : %v", userId, err)
 			return
 		}
-	}
-
-	genreList := strings.Split(genres, ",|")
-	top5Genres := utils.TopNOccurrences(genreList, 5)
-	for i, genre := range top5Genres {
-		copy(top5GenresTensor[i*10:], genreFeature(genre.Key))
-	}
-
-	rows2, err = db.Query(`select avg(rating) as avgRating, 
-						   count(rating) cntRating
-					from `+tableName+` where userId = ?`, userId)
-	if err != nil {
-		log.Errorf("failed to query ratings: %v", err)
+		// split genres with delimiter "|" and ","
+		genreList := strings.FieldsFunc(ugenres.String, func(r rune) bool {
+			return r == '|' || r == ','
+		})
+		//TODO: multi-hot with occurrence weight
+		top5Genres := utils.TopNOccurrences(genreList, 5)
+		for i, genre := range top5Genres {
+			copy(top5GenresTensor[i*10:], genreFeature(genre.Key))
+		}
+		tensor = utils.ConcatSlice(rcmd.Tensor{avgRating.Float64 / 5., cntRating.Float64 / 100.}, top5GenresTensor[:])
+		if rcmd.DebugItemId != 0 && userId == rcmd.DebugUserId {
+			log.Infof("user %d: %v ", userId, tensor)
+		}
+		return
+	} else {
+		err = fmt.Errorf("userId %d not found", userId)
+		log.Errorf("userId %d not found", userId)
 		return
 	}
-	defer rows2.Close()
-	for rows2.Next() {
-		if err = rows2.Scan(&avgRating, &cntRating); err != nil {
-			log.Errorf("failed to scan movieId: %v", err)
-			return
-		}
-	}
-
-	tensor = utils.ConcatSlice(rcmd.Tensor{avgRating.Float64 / 5., cntRating.Float64 / 100.}, top5GenresTensor[:])
-	if rcmd.DebugItemId != 0 && userId == rcmd.DebugUserId {
-		log.Infof("user %d: %v ", userId, tensor)
-	}
-	return
 }
 
 func genreFeature(genre string) (tensor rcmd.Tensor) {
 	return feature.HashOneHot([]byte(genre), 10)
 }
 
-func (recSys *RecSysImpl) SampleGenerator(_ context.Context) (ret <-chan rcmd.Sample, err error) {
+func (recSys *MovielensRec) SampleGenerator(_ context.Context) (ret <-chan rcmd.Sample, err error) {
 	sampleCh := make(chan rcmd.Sample, 10000)
 	var (
 		wg sync.WaitGroup
@@ -229,7 +216,7 @@ func (recSys *RecSysImpl) SampleGenerator(_ context.Context) (ret <-chan rcmd.Sa
 		}()
 
 		rows, err = db.Query(
-			"SELECT userId, movieId, rating FROM ratings_train ORDER BY timestamp, userId ASC LIMIT ?", recSys.SampleCnt)
+			"SELECT userId, movieId, rating, timestamp FROM ratings_train ORDER BY timestamp, userId ASC LIMIT ?", recSys.SampleCnt)
 		if err != nil {
 			log.Errorf("failed to query ratings: %v", err)
 			wg.Done()
@@ -242,8 +229,9 @@ func (recSys *RecSysImpl) SampleGenerator(_ context.Context) (ret <-chan rcmd.Sa
 			var (
 				userId, movieId int
 				rating, label   float64
+				timestamp       int64
 			)
-			if err = rows.Scan(&userId, &movieId, &rating); err != nil {
+			if err = rows.Scan(&userId, &movieId, &rating, &timestamp); err != nil {
 				log.Errorf("failed to scan ratings: %v", err)
 				return
 			}
@@ -251,9 +239,10 @@ func (recSys *RecSysImpl) SampleGenerator(_ context.Context) (ret <-chan rcmd.Sa
 			// label = rating / 5.0
 
 			sampleCh <- rcmd.Sample{
-				UserId: userId,
-				ItemId: movieId,
-				Label:  label,
+				UserId:    userId,
+				ItemId:    movieId,
+				Label:     label,
+				Timestamp: timestamp,
 			}
 		}
 	}()
@@ -263,7 +252,7 @@ func (recSys *RecSysImpl) SampleGenerator(_ context.Context) (ret <-chan rcmd.Sa
 	return
 }
 
-func (recSys *RecSysImpl) PreTrain(ctx context.Context) (err error) {
+func (recSys *MovielensRec) PreTrain(ctx context.Context) (err error) {
 	if err = initDb(recSys.DataPath); err != nil {
 		return
 	}
@@ -293,6 +282,16 @@ func (recSys *RecSysImpl) PreTrain(ctx context.Context) (err error) {
 		recSys.mRatingMap[movieId] = [2]float64{avgR, float64(cntR)}
 	}
 
+	// fill user behavior cache
+	if recSys.ubcTrain == nil {
+		recSys.ubcTrain = ubcache.NewUserBehaviorCache()
+		err = PreFillUbCache(recSys.ubcTrain, "ub_train")
+		if err != nil {
+			log.Errorf("failed to fill ub cache: %v", err)
+			return
+		}
+	}
+
 	return
 }
 
@@ -304,7 +303,7 @@ func getRows(ctx context.Context, offset, size int, table string) (*sql.Rows, er
 	return db.QueryContext(ctx, sql)
 }
 
-func (recSys *RecSysImpl) GetUsersFeatureOverview(ctx context.Context, offset, size int, _ map[string][]string) (res rcmd.UserItemOverviewResult, err error) {
+func (recSys *MovielensRec) GetUsersFeatureOverview(ctx context.Context, offset, size int, _ map[string][]string) (res rcmd.UserItemOverviewResult, err error) {
 	var rows *sql.Rows
 	rows, err = getRows(ctx, offset, size, "user")
 	if err != nil {
@@ -328,7 +327,7 @@ func (recSys *RecSysImpl) GetUsersFeatureOverview(ctx context.Context, offset, s
 	return res, nil
 }
 
-func (recSys *RecSysImpl) GetItemsFeatureOverview(ctx context.Context, offset, size int, _ map[string][]string) (res rcmd.ItemOverviewResult, err error) {
+func (recSys *MovielensRec) GetItemsFeatureOverview(ctx context.Context, offset, size int, _ map[string][]string) (res rcmd.ItemOverviewResult, err error) {
 	var rows *sql.Rows
 	rows, err = getRows(ctx, offset, size, "movies")
 	if err != nil {
@@ -356,7 +355,7 @@ func (recSys *RecSysImpl) GetItemsFeatureOverview(ctx context.Context, offset, s
 	return
 }
 
-func (recSys *RecSysImpl) GetDashboardOverview(ctx context.Context) (res rcmd.DashboardOverviewResult, err error) {
+func (recSys *MovielensRec) GetDashboardOverview(ctx context.Context) (res rcmd.DashboardOverviewResult, err error) {
 	for _, cur := range []struct {
 		table   string
 		pointer *int
@@ -369,10 +368,8 @@ func (recSys *RecSysImpl) GetDashboardOverview(ctx context.Context) (res rcmd.Da
 			&res.Items,
 		},
 	} {
-		var row *sql.Row
-		row = db.QueryRowContext(ctx, fmt.Sprintf("select count(*) from %s", cur.table))
-		err = row.Err()
-		if err != nil {
+		row := db.QueryRowContext(ctx, fmt.Sprintf("select count(*) from %s", cur.table))
+		if row.Err() != nil {
 			log.Errorf("query %s count fail, err: %v", cur.table, err)
 			return
 		}
