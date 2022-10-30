@@ -13,7 +13,7 @@ import (
 	"gorgonia.org/tensor"
 )
 
-var dt = tensor.Float64
+var DT = tensor.Float32
 
 const (
 	// magic numbers for din paper
@@ -41,12 +41,12 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 	m Model,
 ) (err error) {
 	g := m.Graph()
-	xUserProfile := G.NewMatrix(g, dt, G.WithShape(batchSize, uProfileDim), G.WithName("xUserProfile"))
-	//xUserBehaviors := G.NewTensor(g, dt, 3, G.WithShape(batchSize, uBehaviorSize, uBehaviorDim), G.WithName("xUserBehaviors"))
-	xUserBehaviorMatrix := G.NewMatrix(g, dt, G.WithShape(batchSize, uBehaviorSize*uBehaviorDim), G.WithName("xUserBehaviorMatrix"))
-	xItemFeature := G.NewMatrix(g, dt, G.WithShape(batchSize, iFeatureDim), G.WithName("xItemFeature"))
-	xCtxFeature := G.NewMatrix(g, dt, G.WithShape(batchSize, cFeatureDim), G.WithName("xCtxFeature"))
-	y := G.NewTensor(g, dt, 2, G.WithShape(batchSize, 1), G.WithName("y"))
+	xUserProfile := G.NewMatrix(g, DT, G.WithShape(batchSize, uProfileDim), G.WithName("xUserProfile"))
+	//xUserBehaviors := G.NewTensor(g, DT, 3, G.WithShape(batchSize, uBehaviorSize, uBehaviorDim), G.WithName("xUserBehaviors"))
+	xUserBehaviorMatrix := G.NewMatrix(g, DT, G.WithShape(batchSize, uBehaviorSize*uBehaviorDim), G.WithName("xUserBehaviorMatrix"))
+	xItemFeature := G.NewMatrix(g, DT, G.WithShape(batchSize, iFeatureDim), G.WithName("xItemFeature"))
+	xCtxFeature := G.NewMatrix(g, DT, G.WithShape(batchSize, cFeatureDim), G.WithName("xCtxFeature"))
+	y := G.NewTensor(g, DT, 2, G.WithShape(batchSize, 1), G.WithName("y"))
 	//m := NewDinNet(g, uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim)
 	if err = m.Fwd(xUserProfile, xUserBehaviorMatrix, xItemFeature, xCtxFeature, batchSize, uBehaviorSize, uBehaviorDim); err != nil {
 		log.Fatalf("%+v", err)
@@ -55,8 +55,8 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 	//losses := G.Must(G.HadamardProd(G.Must(G.Neg(G.Must(G.Log(m.out)))), y))
 	//losses := G.Must(G.Square(G.Must(G.Sub(m.Out(), y))))
 	positive := G.Must(G.HadamardProd(G.Must(G.Log(m.Out())), y))
-	negative := G.Must(G.HadamardProd(G.Must(G.Log(G.Must(G.Sub(G.NewConstant(float64(1.0+1e-8)), m.Out())))), G.Must(G.Sub(G.NewConstant(float64(1.0)), y))))
-	//negative := G.Must(G.Log(G.Must(G.Sub(G.NewConstant(float64(1.000000001)), m.Out()))))
+	negative := G.Must(G.HadamardProd(G.Must(G.Log(G.Must(G.Sub(G.NewConstant(float32(1.0+1e-8)), m.Out())))), G.Must(G.Sub(G.NewConstant(float32(1.0)), y))))
+	//negative := G.Must(G.Log(G.Must(G.Sub(G.NewConstant(float32(1.000000001)), m.Out()))))
 	cost := G.Must(G.Neg(G.Must(G.Mean(G.Must(G.Add(positive, negative))))))
 
 	// we want to track costs
@@ -93,11 +93,11 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 	)
 	m.SetVM(vm)
 
-	//solver := G.NewRMSPropSolver(G.WithBatchSize(float64(batchSize)))
-	//solver := G.NewVanillaSolver(G.WithBatchSize(float64(batchSize)), G.WithLearnRate(0.001))
-	//solver := G.NewBarzilaiBorweinSolver(G.WithBatchSize(float64(batchSize)), G.WithLearnRate(0.001))
-	//solver := G.NewAdaGradSolver(G.WithBatchSize(float64(batchSize)), G.WithLearnRate(0.001))
-	//solver := G.NewMomentum(G.WithBatchSize(float64(batchSize)), G.WithLearnRate(0.001))
+	//solver := G.NewRMSPropSolver(G.WithBatchSize(float32(batchSize)))
+	//solver := G.NewVanillaSolver(G.WithBatchSize(float32(batchSize)), G.WithLearnRate(0.001))
+	//solver := G.NewBarzilaiBorweinSolver(G.WithBatchSize(float32(batchSize)), G.WithLearnRate(0.001))
+	//solver := G.NewAdaGradSolver(G.WithBatchSize(float32(batchSize)), G.WithLearnRate(0.001))
+	//solver := G.NewMomentum(G.WithBatchSize(float32(batchSize)), G.WithLearnRate(0.001))
 	solver := G.NewAdamSolver(G.WithLearnRate(0.01), G.WithBatchSize(float64(batchSize)), G.WithL2Reg(0.0001))
 	//defer func() {
 	//	vm.Close()
@@ -110,7 +110,7 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 	log.Printf("Batches %d", batches)
 	bar := pb.New(batches)
 	var (
-		bestCost  = math.MaxFloat64
+		bestCost  float32 = math.MaxFloat32
 		noImprove int
 	)
 
@@ -180,7 +180,7 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 			vm.Reset()
 			bar.Increment()
 		}
-		costVal := cost.Value().Data().(float64)
+		costVal := cost.Value().Data().(float32)
 		if costVal < bestCost {
 			bestCost = costVal
 			noImprove = 0
@@ -202,10 +202,10 @@ func InitForwardOnlyVm(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cF
 	m Model,
 ) (err error) {
 	g := m.Graph()
-	xUserProfile := G.NewMatrix(g, dt, G.WithShape(batchSize, uProfileDim), G.WithName("xUserProfile"))
-	xUserBehaviorMatrix := G.NewMatrix(g, dt, G.WithShape(batchSize, uBehaviorSize*uBehaviorDim), G.WithName("xUserBehaviorMatrix"))
-	xItemFeature := G.NewMatrix(g, dt, G.WithShape(batchSize, iFeatureDim), G.WithName("xItemFeature"))
-	xCtxFeature := G.NewMatrix(g, dt, G.WithShape(batchSize, cFeatureDim), G.WithName("xCtxFeature"))
+	xUserProfile := G.NewMatrix(g, DT, G.WithShape(batchSize, uProfileDim), G.WithName("xUserProfile"))
+	xUserBehaviorMatrix := G.NewMatrix(g, DT, G.WithShape(batchSize, uBehaviorSize*uBehaviorDim), G.WithName("xUserBehaviorMatrix"))
+	xItemFeature := G.NewMatrix(g, DT, G.WithShape(batchSize, iFeatureDim), G.WithName("xItemFeature"))
+	xCtxFeature := G.NewMatrix(g, DT, G.WithShape(batchSize, cFeatureDim), G.WithName("xCtxFeature"))
 	if err = m.Fwd(xUserProfile, xUserBehaviorMatrix, xItemFeature, xCtxFeature,
 		batchSize, uBehaviorSize, uBehaviorDim); err != nil {
 		return
@@ -224,7 +224,7 @@ func InitForwardOnlyVm(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cF
 	return
 }
 
-func Predict(m Model, numExamples, batchSize int, si *rcmd.SampleInfo, inputs tensor.Tensor) (y []float64, err error) {
+func Predict(m Model, numExamples, batchSize int, si *rcmd.SampleInfo, inputs tensor.Tensor) (y []float32, err error) {
 	//input nodes
 	inputNodes := m.In()
 	xUserProfile := inputNodes[0]
@@ -299,7 +299,7 @@ func Predict(m Model, numExamples, batchSize int, si *rcmd.SampleInfo, inputs te
 		}
 
 		//get y
-		yVal := outputNode.Value().Data().([]float64)
+		yVal := outputNode.Value().Data().([]float32)
 		for i := 0; i < end-start; i++ {
 			y = append(y, yVal[i])
 		}
@@ -312,14 +312,14 @@ func Predict(m Model, numExamples, batchSize int, si *rcmd.SampleInfo, inputs te
 func accuracy(prediction, y []float64) float64 {
 	var ok float64
 	for i := 0; i < len(prediction); i++ {
-		if math.Round(prediction[i]-y[i]) == 0 {
+		if math.Round(float64(prediction[i]-y[i])) == 0 {
 			ok += 1.0
 		}
 	}
 	return ok / float64(len(y))
 }
 
-func rocauc(pred, y []float64) float64 {
+func RocAuc(pred, y []float64) float64 {
 	boolY := make([]float64, len(y))
 	for i := 0; i < len(y); i++ {
 		if y[i] > 0.5 {
@@ -332,4 +332,23 @@ func rocauc(pred, y []float64) float64 {
 	yScore := mat.NewDense(len(pred), 1, pred)
 
 	return metrics.ROCAUCScore(yTrue, yScore, "", nil)
+}
+
+func RocAuc32(pred, y []float32) float32 {
+	boolY := make([]float64, len(y))
+	for i := 0; i < len(y); i++ {
+		if y[i] > 0.5 {
+			boolY[i] = 1.0
+		} else {
+			boolY[i] = 0.0
+		}
+	}
+	pred64 := make([]float64, len(pred))
+	for i := 0; i < len(pred); i++ {
+		pred64[i] = float64(pred[i])
+	}
+	yTrue := mat.NewDense(len(y), 1, boolY)
+	yScore := mat.NewDense(len(pred), 1, pred64)
+
+	return float32(metrics.ROCAUCScore(yTrue, yScore, "", nil))
 }

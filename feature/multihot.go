@@ -23,6 +23,17 @@ func HashOneHot(buf []byte, size int) []float64 {
 	return result
 }
 
+func HashOneHot32(buf []byte, size int) []float32 {
+	result := make([]float32, size)
+	hash := fnv.New32()
+	_, err := hash.Write(buf)
+	if err != nil {
+		return nil
+	}
+	result[int(hash.Sum32())%size] = 1
+	return result
+}
+
 func StringSplitMultiHot(str string, sep string, size int) []float64 {
 	result := make([]float64, size)
 	for _, s := range strings.Split(str, sep) {
