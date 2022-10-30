@@ -95,7 +95,7 @@ func PreFillUbCache(ubc *ubcache.UserBehaviorCache, table string) (err error) {
 			tsSeq      []int64
 		)
 		if err = rows.Scan(&userId, &movieIds, &timestamps); err != nil {
-			log.Errorf("failed to scan movieId: %v", err)
+			log.Errorf("failed to scan %s: %v", table, err)
 			return
 		}
 		tsSeq = utils.ParseInt64Seq(timestamps)
