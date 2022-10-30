@@ -423,7 +423,10 @@ func GetSample(recSys RecSys, ctx context.Context) (sample *TrainSample, err err
 			Response: []float64{sv.label},
 		})
 		if len(sample.Data)%1000 == 0 {
-			log.Infof("sample size: %d", len(sample.Data))
+			log.Infof("sample size: %d, uc: %d, ic: %d", len(sample.Data),
+				UserFeatureCache.ItemCount(),
+				ItemFeatureCache.ItemCount(),
+			)
 		}
 	}
 
