@@ -26,7 +26,7 @@ var (
 
 func initDb(dbPath string) (err error) {
 	dbOnce.Do(func() {
-		db, err = sql.Open("sqlite3", dbPath)
+		db, err = sql.Open("sqlite3", fmt.Sprintf("file:%s?cache=shared&mode=ro", dbPath))
 		if err != nil {
 			log.Errorf("failed to open db: %v", err)
 			return
@@ -146,8 +146,8 @@ func (recSys *MovielensRec) GetItemFeature(ctx context.Context, itemId int) (ten
 func (recSys *MovielensRec) GetUserFeature(ctx context.Context, userId int) (tensor rcmd.Tensor, err error) {
 	var (
 		tableName        string
-		rows, rows2      *sql.Rows
-		genres           string
+		rows             *sql.Rows
+		ugenres          string
 		avgRating        sql.NullFloat64
 		cntRating        sql.NullFloat64
 		top5GenresTensor [50]float64
@@ -156,61 +156,45 @@ func (recSys *MovielensRec) GetUserFeature(ctx context.Context, userId int) (ten
 	stage := ctx.Value(rcmd.StageKey).(rcmd.Stage)
 	switch stage {
 	case rcmd.TrainStage:
-		tableName = "ratings_train"
+		tableName = "user_feature_train"
 	case rcmd.PredictStage:
-		tableName = "ratings_test"
+		tableName = "user_feature_test"
 	default:
 		panic("unknown stage")
 	}
 
-	rows, err = db.Query(`select 
-                           group_concat(genres) as ugenres
-                    from `+tableName+` r2
-                             left join movies t2 on r2.movieId = t2.movieId
-                    where userId = ? and
-                    		r2.rating > 3.5
-                    group by userId`, userId)
+	rows, err = db.Query(fmt.Sprintf(
+		`select ugenres, avgRating, cntRating from %s where userId = ?`, tableName), userId)
 	if err != nil {
 		log.Errorf("failed to query ratings: %v", err)
 		return
 	}
 	defer rows.Close()
-	for rows.Next() {
-		if err = rows.Scan(&genres); err != nil {
+	if rows.Next() {
+		if err = rows.Scan(&ugenres, &avgRating, &cntRating); err != nil {
 			log.Errorf("failed to scan movieId: %v", err)
 			return
 		}
-	}
-
-	// split genres with delimiter "|" and ","
-	genreList := strings.FieldsFunc(genres, func(r rune) bool {
-		return r == '|' || r == ','
-	})
-	//TODO: multi-hot with occurrence weight
-	top5Genres := utils.TopNOccurrences(genreList, 5)
-	for i, genre := range top5Genres {
-		copy(top5GenresTensor[i*10:], genreFeature(genre.Key))
-	}
-
-	rows2, err = db.Query(`select avg(rating) as avgRating, 
-						   count(rating) cntRating
-					from `+tableName+` where userId = ?`, userId)
-	if err != nil {
-		log.Errorf("failed to query ratings: %v", err)
+		// split genres with delimiter "|" and ","
+		genreList := strings.FieldsFunc(ugenres, func(r rune) bool {
+			return r == '|' || r == ','
+		})
+		//TODO: multi-hot with occurrence weight
+		top5Genres := utils.TopNOccurrences(genreList, 5)
+		for i, genre := range top5Genres {
+			copy(top5GenresTensor[i*10:], genreFeature(genre.Key))
+		}
+		tensor = utils.ConcatSlice(rcmd.Tensor{avgRating.Float64 / 5., cntRating.Float64 / 100.}, top5GenresTensor[:])
+		if rcmd.DebugItemId != 0 && userId == rcmd.DebugUserId {
+			log.Infof("user %d: %v ", userId, tensor)
+		}
+		return
+	} else {
+		err = fmt.Errorf("userId %d not found", userId)
+		log.Errorf("userId %d not found", userId)
 		return
 	}
-	defer rows2.Close()
-	for rows2.Next() {
-		if err = rows2.Scan(&avgRating, &cntRating); err != nil {
-			log.Errorf("failed to scan movieId: %v", err)
-			return
-		}
-	}
 
-	tensor = utils.ConcatSlice(rcmd.Tensor{avgRating.Float64 / 5., cntRating.Float64 / 100.}, top5GenresTensor[:])
-	if rcmd.DebugItemId != 0 && userId == rcmd.DebugUserId {
-		log.Infof("user %d: %v ", userId, tensor)
-	}
 	return
 }
 
