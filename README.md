@@ -16,7 +16,7 @@ Deep Learning(Item2vec Embedding + MLP) based Feature-Engineering & Training & P
   - [ ] Batch Normalization
 - [x] [DeepInterestNetwork](./model/din/din.go)
   - [x] [DIN test on MovieLens](./example/movielens/dinimpl_test.go)
-  - [x] Euclidean Distance based attention
+  - [x] [Euclidean Distance based attention](model/din/activation.go)
   - [x] Dropout and L2 regularization
   - [ ] Batch Normalization
 
