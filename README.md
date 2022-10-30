@@ -4,6 +4,22 @@
 
 Deep Learning(Item2vec Embedding + MLP) based Feature-Engineering & Training & Predict all in one Recommendation System that can run on small server or edge device.
 
+# Models implemented
+
+- [x] [Simple 2 layer MLP](./nn/neural_network/multilayer_perceptron.go)
+  - [x] [Simple 2 layer MLP test on MovieLens](./example/movielens/feature_test.go)
+  - [x] Dropout and L2 regularization
+  - [x] Batch Normalization
+- [x] [YouTube DNN](./model/din/simplemlp.go)
+  - [x] [YouTube DNN test on MovieLens](./example/movielens/mlpimpl_test.go)
+  - [x] Dropout and L2 regularization
+  - [ ] Batch Normalization
+- [x] [DeepInterestNetwork](./model/din/din.go)
+  - [x] [DIN test on MovieLens](./example/movielens/dinimpl_test.go)
+  - [x] Euclidean Distance based attention
+  - [x] Dropout and L2 regularization
+  - [ ] Batch Normalization
+
 # Demo
 
 You can run the MovieLens training and predict demo by:
@@ -161,6 +177,7 @@ To make this project work, quite a lot of code are copied and modified from the 
 
 # Papers related
 
+- [YouTube DNN](https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/45530.pdf)
 - [Deep Interest Network for Click-Through Rate Prediction](https://arxiv.org/abs/1706.06978)
 - [Document Embedding with Paragraph Vectors](https://arxiv.org/abs/1507.07998)
 - [EdgeRec: Recommender System on Edge in Mobile Taobao](https://arxiv.org/abs/2005.08416) // not very identical implementation
