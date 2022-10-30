@@ -28,3 +28,24 @@ func TestGetAUC(t *testing.T) {
 		So(auc, ShouldEqual, .75)
 	})
 }
+
+func TestParseInt64Seq(t *testing.T) {
+	Convey("test parse int64 seq", t, func() {
+		seq := ParseInt64Seq("1,2,3,4,5")
+		So(seq, ShouldResemble, []int64{1, 2, 3, 4, 5})
+
+		seq = ParseInt64Seq("1,2,3,4,5,")
+		So(seq, ShouldResemble, []int64{1, 2, 3, 4, 5})
+
+		// empty string
+		seq = ParseInt64Seq("")
+		So(seq, ShouldHaveLength, 0)
+	})
+}
+
+func TestInt64SeqToIntSeq(t *testing.T) {
+	Convey("test int64 seq to int seq", t, func() {
+		seq := Int64SeqToIntSeq([]int64{1, 2, 3, 4, 5})
+		So(seq, ShouldResemble, []int{1, 2, 3, 4, 5})
+	})
+}
