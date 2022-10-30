@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/auxten/edgeRec/feature"
+	"github.com/auxten/edgeRec/feature/ubcache"
 	rcmd "github.com/auxten/edgeRec/recommend"
 	"github.com/auxten/edgeRec/utils"
 	_ "github.com/mattn/go-sqlite3"
@@ -30,6 +31,7 @@ func initDb(dbPath string) (err error) {
 			log.Errorf("failed to open db: %v", err)
 			return
 		}
+		db.SetMaxOpenConns(16)
 	})
 	return
 }
@@ -38,6 +40,8 @@ type MovielensRec struct {
 	DataPath   string
 	SampleCnt  int
 	mRatingMap map[int][2]float64
+	ubcTrain   *ubcache.UserBehaviorCache
+	ubcPredict *ubcache.UserBehaviorCache
 }
 
 func (recSys *MovielensRec) ItemSeqGenerator(ctx context.Context) (ret <-chan string, err error) {
@@ -267,43 +271,6 @@ func (recSys *MovielensRec) SampleGenerator(_ context.Context) (ret <-chan rcmd.
 	return
 }
 
-func (recSys *MovielensRec) GetUserBehavior(ctx context.Context, userId int,
-	maxLen int64, maxPk int64, maxTs int64) (itemSeq []int, err error) {
-	var (
-		rows      *sql.Rows
-		tableName string
-	)
-	// get stage value from ctx
-	stage := ctx.Value(rcmd.StageKey).(rcmd.Stage)
-	switch stage {
-	case rcmd.TrainStage:
-		tableName = "ratings_train"
-	case rcmd.PredictStage:
-		tableName = "ratings_test"
-	default:
-		panic("unknown stage")
-	}
-
-	rows, err = db.Query(`select movieId from `+tableName+
-		` where userId = ? and timestamp <= ? order by timestamp desc limit ?`,
-		userId, maxTs, maxLen)
-	if err != nil {
-		log.Errorf("failed to query ratings: %v", err)
-		return
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var movieId int
-		if err = rows.Scan(&movieId); err != nil {
-			log.Errorf("failed to scan movieId: %v", err)
-			return
-		}
-		itemSeq = append(itemSeq, movieId)
-	}
-
-	return
-}
-
 func (recSys *MovielensRec) PreTrain(ctx context.Context) (err error) {
 	if err = initDb(recSys.DataPath); err != nil {
 		return
@@ -332,6 +299,16 @@ func (recSys *MovielensRec) PreTrain(ctx context.Context) (err error) {
 			return
 		}
 		recSys.mRatingMap[movieId] = [2]float64{avgR, float64(cntR)}
+	}
+
+	// fill user behavior cache
+	if recSys.ubcTrain == nil {
+		recSys.ubcTrain = ubcache.NewUserBehaviorCache()
+		err = PreFillUbCache(recSys.ubcTrain, "ub_train")
+		if err != nil {
+			log.Errorf("failed to fill ub cache: %v", err)
+			return
+		}
 	}
 
 	return

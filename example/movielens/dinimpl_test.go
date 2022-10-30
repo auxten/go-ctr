@@ -12,6 +12,12 @@ import (
 	"gonum.org/v1/gonum/mat"
 )
 
+type dinPredictor struct {
+	rcmd.PreRanker
+	rcmd.Predictor
+	rcmd.UserBehavior
+}
+
 func TestDinOnMovielens(t *testing.T) {
 	rand.Seed(42)
 
@@ -29,8 +35,8 @@ func TestDinOnMovielens(t *testing.T) {
 		dinModel := &dinImpl{
 			predBatchSize: 100,
 			batchSize:     200,
-			epochs:        200,
-			earlyStop:     20,
+			epochs:        100,
+			earlyStop:     100,
 		}
 		trainCtx := context.Background()
 		model, err = rcmd.Train(trainCtx, movielens, dinModel)
@@ -60,7 +66,12 @@ func TestDinOnMovielens(t *testing.T) {
 			sampleKeys = append(sampleKeys, rcmd.Sample{userId, itemId, 0, timestamp})
 		}
 		batchPredictCtx := context.Background()
-		yPred, err := rcmd.BatchPredict(batchPredictCtx, model, sampleKeys)
+		dinPred := &dinPredictor{
+			PreRanker:    movielens,
+			Predictor:    model,
+			UserBehavior: movielens,
+		}
+		yPred, err := rcmd.BatchPredict(batchPredictCtx, dinPred, sampleKeys)
 		So(err, ShouldBeNil)
 		rocAuc := metrics.ROCAUCScore(yTrue, yPred, "", nil)
 		rowCount, _ := yTrue.Dims()
