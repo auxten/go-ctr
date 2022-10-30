@@ -114,9 +114,9 @@ func NewSimpleMLP(
 	cFeatureDim int,
 ) (mlp *SimpleMLP) {
 	g := G.NewGraph()
-	mlp0 := G.NewMatrix(g, G.Float64, G.WithShape(uProfileDim+uBehaviorSize*uBehaviorDim+iFeatureDim+cFeatureDim, mlp0_1), G.WithName("mlp0"), G.WithInit(G.Gaussian(0, 1)))
-	mlp1 := G.NewMatrix(g, G.Float64, G.WithShape(mlp0_1, mlp1_2), G.WithName("mlp1"), G.WithInit(G.Gaussian(0, 1)))
-	mlp2 := G.NewMatrix(g, G.Float64, G.WithShape(mlp1_2, 1), G.WithName("mlp2"), G.WithInit(G.Gaussian(0, 1)))
+	mlp0 := G.NewMatrix(g, G.Float64, G.WithShape(uProfileDim+uBehaviorSize*uBehaviorDim+iFeatureDim+cFeatureDim, mlp0_1), G.WithName("mlp0"), G.WithInit(G.HeN(1.0)))
+	mlp1 := G.NewMatrix(g, G.Float64, G.WithShape(mlp0_1, mlp1_2), G.WithName("mlp1"), G.WithInit(G.HeN(1.0)))
+	mlp2 := G.NewMatrix(g, G.Float64, G.WithShape(mlp1_2, 1), G.WithName("mlp2"), G.WithInit(G.HeN(1.0)))
 	return &SimpleMLP{
 		uProfileDim:   uProfileDim,
 		uBehaviorSize: uBehaviorSize,
@@ -125,8 +125,8 @@ func NewSimpleMLP(
 		cFeatureDim:   cFeatureDim,
 
 		g:    g,
-		d0:   0.01,
-		d1:   0.01,
+		d0:   0.003,
+		d1:   0.003,
 		mlp0: mlp0,
 		mlp1: mlp1,
 		mlp2: mlp2,
@@ -153,9 +153,9 @@ func (mlp *SimpleMLP) Fwd(xUserProfile, ubMatrix, xItemFeature, xCtxFeature *G.N
 	// concat
 	x := G.Must(G.Concat(1, xUserProfile, xUserBehaviors, xItemFeature, xCtxFeature))
 	// mlp
-	mlp0Out := G.Must(G.LeakyRelu(G.Must(G.Mul(x, mlp.mlp0)), 0.1))
+	mlp0Out := G.Must(G.Sigmoid(G.Must(G.Mul(x, mlp.mlp0))))
 	mlp0Out = G.Must(G.Dropout(mlp0Out, mlp.d0))
-	mlp1Out := G.Must(G.LeakyRelu(G.Must(G.Mul(mlp0Out, mlp.mlp1)), 0.1))
+	mlp1Out := G.Must(G.Sigmoid(G.Must(G.Mul(mlp0Out, mlp.mlp1))))
 	mlp1Out = G.Must(G.Dropout(mlp1Out, mlp.d1))
 
 	mlp.out = G.Must(G.Sigmoid(G.Must(G.Mul(mlp1Out, mlp.mlp2))))

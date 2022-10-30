@@ -25,7 +25,8 @@ func TestMultiModel(t *testing.T) {
 		numExamples = 100000
 		epochs      = 20
 
-		testSamples   = 100
+		// to test sample count not fully match batch size
+		testSamples   = 118
 		testBatchSize = 20
 
 		sampleInfo = &rcmd.SampleInfo{
@@ -76,8 +77,8 @@ func TestMultiModel(t *testing.T) {
 
 	dinModel := NewDinNet(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim)
 	Convey("Din model", t, func() {
-		err := Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim,
-			numExamples, batchSize, epochs,
+		err := Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim,
+			numExamples, batchSize, epochs, 0,
 			sampleInfo,
 			inputs, labels,
 			dinModel,
@@ -95,7 +96,7 @@ func TestMultiModel(t *testing.T) {
 	})
 
 	Convey("Din predict", t, func() {
-		err := InitForwardOnlyVm(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim, testBatchSize, dinPredict)
+		err := InitForwardOnlyVm(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim, testBatchSize, dinPredict)
 		So(err, ShouldBeNil)
 		predictions, err := Predict(dinPredict, testSamples, testBatchSize, sampleInfo, inputs)
 		So(err, ShouldBeNil)
@@ -109,8 +110,8 @@ func TestMultiModel(t *testing.T) {
 
 	mlpModel := NewSimpleMLP(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim)
 	Convey("Simple MLP", t, func() {
-		err := Train(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim,
-			numExamples, batchSize, epochs,
+		err := Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim,
+			numExamples, batchSize, epochs, 10,
 			sampleInfo,
 			inputs, labels,
 			mlpModel,
@@ -128,7 +129,7 @@ func TestMultiModel(t *testing.T) {
 	})
 
 	Convey("Simple MLP predict", t, func() {
-		err := InitForwardOnlyVm(uBehaviorSize, uBehaviorDim, uProfileDim, iFeatureDim, cFeatureDim, testBatchSize, mlpPredict)
+		err := InitForwardOnlyVm(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim, testBatchSize, mlpPredict)
 		So(err, ShouldBeNil)
 		predictions, err := Predict(mlpPredict, testSamples, testBatchSize, sampleInfo, inputs)
 		So(err, ShouldBeNil)
