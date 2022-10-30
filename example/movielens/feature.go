@@ -90,8 +90,7 @@ func (recSys *MovielensRec) GetItemFeature(ctx context.Context, itemId int) (ten
 		rows *sql.Rows
 	)
 
-	rows, err = db.Query(`select m."movieId" itemId,
-					   "title"     itemTitle,
+	rows, err = db.Query(`select "title"     itemTitle,
 					   "genres"    itemGenres
 				from movies m
 				WHERE m.movieId = ?`, itemId)
@@ -102,13 +101,13 @@ func (recSys *MovielensRec) GetItemFeature(ctx context.Context, itemId int) (ten
 	defer rows.Close()
 	if rows.Next() {
 		var (
-			itemId, movieYear     int
+			movieYear             int
 			itemTitle, itemGenres string
 			avgRating, cntRating  float64
 			GenreTensor           [50]float64 // 5 * 10
 		)
-		if err = rows.Scan(&itemId, &itemTitle, &itemGenres); err != nil {
-			log.Errorf("failed to scan movieId: %v", err)
+		if err = rows.Scan(&itemTitle, &itemGenres); err != nil {
+			log.Errorf("failed to scan item %d: %v", itemId, err)
 			return
 		}
 		// regex match year from itemTitle
@@ -147,7 +146,7 @@ func (recSys *MovielensRec) GetUserFeature(ctx context.Context, userId int) (ten
 	var (
 		tableName        string
 		rows             *sql.Rows
-		ugenres          string
+		ugenres          sql.NullString
 		avgRating        sql.NullFloat64
 		cntRating        sql.NullFloat64
 		top5GenresTensor [50]float64
@@ -172,11 +171,11 @@ func (recSys *MovielensRec) GetUserFeature(ctx context.Context, userId int) (ten
 	defer rows.Close()
 	if rows.Next() {
 		if err = rows.Scan(&ugenres, &avgRating, &cntRating); err != nil {
-			log.Errorf("failed to scan movieId: %v", err)
+			log.Errorf("failed to scan user: %d feature : %v", userId, err)
 			return
 		}
 		// split genres with delimiter "|" and ","
-		genreList := strings.FieldsFunc(ugenres, func(r rune) bool {
+		genreList := strings.FieldsFunc(ugenres.String, func(r rune) bool {
 			return r == '|' || r == ','
 		})
 		//TODO: multi-hot with occurrence weight
@@ -370,8 +369,7 @@ func (recSys *MovielensRec) GetDashboardOverview(ctx context.Context) (res rcmd.
 		},
 	} {
 		row := db.QueryRowContext(ctx, fmt.Sprintf("select count(*) from %s", cur.table))
-		err = row.Err()
-		if err != nil {
+		if row.Err() != nil {
 			log.Errorf("query %s count fail, err: %v", cur.table, err)
 			return
 		}
