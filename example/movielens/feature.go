@@ -194,8 +194,6 @@ func (recSys *MovielensRec) GetUserFeature(ctx context.Context, userId int) (ten
 		log.Errorf("userId %d not found", userId)
 		return
 	}
-
-	return
 }
 
 func genreFeature(genre string) (tensor rcmd.Tensor) {
@@ -371,8 +369,7 @@ func (recSys *MovielensRec) GetDashboardOverview(ctx context.Context) (res rcmd.
 			&res.Items,
 		},
 	} {
-		var row *sql.Row
-		row = db.QueryRowContext(ctx, fmt.Sprintf("select count(*) from %s", cur.table))
+		row := db.QueryRowContext(ctx, fmt.Sprintf("select count(*) from %s", cur.table))
 		err = row.Err()
 		if err != nil {
 			log.Errorf("query %s count fail, err: %v", cur.table, err)
