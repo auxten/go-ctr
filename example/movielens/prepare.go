@@ -112,7 +112,7 @@ func PreFillUbCache(ubc *ubcache.UserBehaviorCache, table string) (err error) {
 	return
 }
 
-//PreRank
+//PreRank is called before rank, it can be used to prefill ub cache.
 func (recSys *MovielensRec) PreRank(ctx context.Context) (err error) {
 	if recSys.ubcPredict == nil {
 		recSys.ubcPredict = ubcache.NewUserBehaviorCache()
