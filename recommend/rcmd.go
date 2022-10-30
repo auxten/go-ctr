@@ -229,7 +229,6 @@ func Train(ctx context.Context, recSys RecSys, mlp Fitter) (model Predictor, err
 		UserFeaturer
 		ItemFeaturer
 		PredictAbstract
-		FeatureOverview
 	}
 	model = &modelImpl{
 		UserFeaturer:    recSys,
@@ -285,7 +284,7 @@ func BatchPredict(ctx context.Context, recSys Predictor, sampleKeys []Sample) (y
 		var (
 			xSlice []float64
 		)
-		xSlice, _, _, err = GetSampleVector(ctx, UserFeatureCache, ItemFeatureCache, UserBehaviorCache, recSys, &sKey)
+		xSlice, _, _, err = GetSampleVector(ctx, UserFeatureCache, ItemFeatureCache, recSys, &sKey)
 		if err != nil {
 			if i == 0 {
 				log.Errorf("get sample vector error: %v", err)
@@ -335,11 +334,6 @@ func GetSample(recSys RecSys, ctx context.Context) (sample *TrainSample, err err
 			ccache.Configure().MaxSize(itemFeatureCacheSize).ItemsToPrune(itemFeatureCacheSize / 100),
 		)
 	}
-	if UserBehaviorCache == nil {
-		UserBehaviorCache = ccache.New(
-			ccache.Configure().MaxSize(userBehaviorCacheSize).ItemsToPrune(userBehaviorCacheSize / 100),
-		)
-	}
 
 	//defer func() {
 	//	UserFeatureCache.Clear()
@@ -369,7 +363,7 @@ func GetSample(recSys RecSys, ctx context.Context) (sample *TrainSample, err err
 					err  error
 					sVec sampleVec
 				)
-				sVec.vec, sVec.uWidth, sVec.iWidth, err = GetSampleVector(ctx, UserFeatureCache, ItemFeatureCache, UserBehaviorCache, recSys, &s)
+				sVec.vec, sVec.uWidth, sVec.iWidth, err = GetSampleVector(ctx, UserFeatureCache, ItemFeatureCache, recSys, &s)
 				if err != nil {
 					log.Debugf("get sample vector error: %v", err)
 					continue
@@ -437,14 +431,14 @@ func GetSample(recSys RecSys, ctx context.Context) (sample *TrainSample, err err
 }
 
 func GetSampleVector(ctx context.Context,
-	userFeatureCache *ccache.Cache, itemFeatureCache *ccache.Cache, userBehaviorCache *ccache.Cache,
+	userFeatureCache *ccache.Cache, itemFeatureCache *ccache.Cache,
 	featureProvider BasicFeatureProvider, sampleKey *Sample,
 ) (vec []float64, userFeatureWidth int, itemFeatureWidth int, err error) {
 	var (
 		zeroItemEmb       [ItemEmbDim]float64
 		zeroUserBehaviors [ItemEmbDim * UserBehaviorLen]float64
 
-		user, item, ubEmb *ccache.Item
+		user, item *ccache.Item
 	)
 	userIdStr := strconv.Itoa(sampleKey.UserId)
 	user, err = userFeatureCache.Fetch(userIdStr, time.Hour*24, func() (ci interface{}, err error) {
@@ -473,8 +467,9 @@ func GetSampleVector(ctx context.Context,
 	var (
 		itemEmb       = zeroItemEmb[:]
 		userBehaviors = zeroUserBehaviors[:]
+		ok            bool
 	)
-	if _, ok := featureProvider.(ItemEmbedding); ok {
+	if len(itemEmbeddingMap) != 0 {
 		if itemEmb, ok = itemEmbeddingMap.Get(strconv.Itoa(sampleKey.ItemId)); !ok {
 			itemEmb = zeroItemEmb[:]
 			log.Debugf("item embedding not found: %d, using zeros", sampleKey.ItemId)
@@ -483,28 +478,26 @@ func GetSampleVector(ctx context.Context,
 		// use itemSeq embeddings got from GetUserBehavior as user behavior,
 		//	else use zero embedding.
 		if recSysUb, ok := featureProvider.(UserBehavior); ok {
-			ubKey := fmt.Sprintf("%d_%d", sampleKey.UserId, sampleKey.Timestamp)
-			ubEmb, err = userBehaviorCache.Fetch(ubKey, time.Hour*24, func() (ci interface{}, err error) {
+			getUbfunc := func(userId int, maxLen int64, maxPk int64, maxTs int64) (ubTensor Tensor, err error) {
 				itemSeq, err := recSysUb.GetUserBehavior(
-					ctx, sampleKey.UserId, UserBehaviorLen, -1, sampleKey.Timestamp)
+					ctx, userId, maxLen, maxPk, maxTs)
 				if err != nil {
 					return
 				}
 				//query items embedding, fill them into user behavior
-				ubTensor := make(Tensor, ItemEmbDim*UserBehaviorLen)
+				ubTensor = make(Tensor, ItemEmbDim*UserBehaviorLen)
 				for i, itemId := range itemSeq {
 					if itemEmb, ok := itemEmbeddingMap.Get(strconv.Itoa(itemId)); ok {
 						copy(ubTensor[i*ItemEmbDim:], itemEmb)
 					}
 				}
-				ci = ubTensor
 				return
-			})
+			}
+			userBehaviors, err = getUbfunc(sampleKey.UserId, UserBehaviorLen, -1, sampleKey.Timestamp)
 			if err != nil {
 				err = fmt.Errorf("get user behavior error: %v", err)
 				return
 			}
-			userBehaviors = ubEmb.Value().(Tensor)
 		}
 	}
 
