@@ -42,19 +42,26 @@ type word2vec struct {
 
 	corpus corpus.Corpus
 
-	param        *matrix.Matrix
-	subsampler   *subsample.Subsampler
-	currentlr    float64
-	mod          mod
-	optimizer    optimizer
-	embeddingMap EmbeddingMap
+	param          *matrix.Matrix
+	subsampler     *subsample.Subsampler
+	currentlr      float64
+	mod            mod
+	optimizer      optimizer
+	embeddingMap   EmbeddingMap
+	embeddingMap32 EmbeddingMap32
 
 	verbose *verbose.Verbose
 }
 
 type EmbeddingMap map[string][]float64
+type EmbeddingMap32 map[string][]float32
 
 func (m *EmbeddingMap) Get(word string) ([]float64, bool) {
+	vec, ok := (*m)[word]
+	return vec, ok
+}
+
+func (m *EmbeddingMap32) Get(word string) ([]float32, bool) {
 	vec, ok := (*m)[word]
 	return vec, ok
 }
@@ -286,6 +293,34 @@ func (w *word2vec) GenEmbeddingMap() (embMap map[string][]float64, err error) {
 	log.Debugf("embedding map size %d created %v", len(w.embeddingMap), clk.AllElapsed())
 
 	return w.embeddingMap, nil
+}
+
+func (w *word2vec) GenEmbeddingMap32() (embMap map[string][]float32, err error) {
+	dict := w.corpus.Dictionary()
+	wordVec := w.WordVector(vector.Agg)
+	if dict.Len() != wordVec.Row() {
+		err = fmt.Errorf("dictionary and word vector size mismatch")
+		return
+	}
+	if dict.Len() == 0 {
+		err = fmt.Errorf("dictionary is empty")
+		return
+	}
+
+	w.embeddingMap32 = make(map[string][]float32)
+	clk := clock.New()
+	for i := 0; i < dict.Len(); i++ {
+		word, _ := dict.Word(i)
+		vec := wordVec.Slice(i)
+		w.embeddingMap32[word] = make([]float32, len(vec))
+		for j := 0; j < len(vec); j++ {
+			w.embeddingMap32[word][j] = float32(vec[j])
+		}
+	}
+
+	log.Debugf("embedding map size %d created %v", len(w.embeddingMap32), clk.AllElapsed())
+
+	return w.embeddingMap32, nil
 }
 
 func LoadEmbeddingMap(f io.Reader) (embMap map[string][]float64, err error) {

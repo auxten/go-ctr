@@ -39,7 +39,7 @@ func initDb(dbPath string) (err error) {
 type MovielensRec struct {
 	DataPath   string
 	SampleCnt  int
-	mRatingMap map[int][2]float64
+	mRatingMap map[int][2]float32
 	ubcTrain   *ubcache.UserBehaviorCache
 	ubcPredict *ubcache.UserBehaviorCache
 }
@@ -103,8 +103,8 @@ func (recSys *MovielensRec) GetItemFeature(ctx context.Context, itemId int) (ten
 		var (
 			movieYear             int
 			itemTitle, itemGenres string
-			avgRating, cntRating  float64
-			GenreTensor           [50]float64 // 5 * 10
+			avgRating, cntRating  float32
+			GenreTensor           [50]float32 // 5 * 10
 		)
 		if err = rows.Scan(&itemTitle, &itemGenres); err != nil {
 			log.Errorf("failed to scan item %d: %v", itemId, err)
@@ -129,11 +129,11 @@ func (recSys *MovielensRec) GetItemFeature(ctx context.Context, itemId int) (ten
 		}
 		if mr, ok := recSys.mRatingMap[itemId]; ok {
 			avgRating = mr[0] / 5.
-			cntRating = math.Log2(mr[1])
+			cntRating = float32(math.Log2(float64(mr[1])))
 		}
 
-		tensor = utils.ConcatSlice(tensor, GenreTensor[:], rcmd.Tensor{
-			float64(movieYear-1990) / 20.0, avgRating, cntRating,
+		tensor = utils.ConcatSlice32(tensor, GenreTensor[:], rcmd.Tensor{
+			float32(movieYear-1990) / 20.0, avgRating, cntRating,
 		})
 		return
 	} else {
@@ -149,7 +149,7 @@ func (recSys *MovielensRec) GetUserFeature(ctx context.Context, userId int) (ten
 		ugenres          sql.NullString
 		avgRating        sql.NullFloat64
 		cntRating        sql.NullFloat64
-		top5GenresTensor [50]float64
+		top5GenresTensor [50]float32
 	)
 	// get stage value from ctx
 	stage := ctx.Value(rcmd.StageKey).(rcmd.Stage)
@@ -183,7 +183,7 @@ func (recSys *MovielensRec) GetUserFeature(ctx context.Context, userId int) (ten
 		for i, genre := range top5Genres {
 			copy(top5GenresTensor[i*10:], genreFeature(genre.Key))
 		}
-		tensor = utils.ConcatSlice(rcmd.Tensor{avgRating.Float64 / 5., cntRating.Float64 / 100.}, top5GenresTensor[:])
+		tensor = utils.ConcatSlice32(rcmd.Tensor{float32(avgRating.Float64) / 5., float32(cntRating.Float64) / 100.}, top5GenresTensor[:])
 		if rcmd.DebugItemId != 0 && userId == rcmd.DebugUserId {
 			log.Infof("user %d: %v ", userId, tensor)
 		}
@@ -196,7 +196,7 @@ func (recSys *MovielensRec) GetUserFeature(ctx context.Context, userId int) (ten
 }
 
 func genreFeature(genre string) (tensor rcmd.Tensor) {
-	return feature.HashOneHot([]byte(genre), 10)
+	return feature.HashOneHot32([]byte(genre), 10)
 }
 
 func (recSys *MovielensRec) SampleGenerator(_ context.Context) (ret <-chan rcmd.Sample, err error) {
@@ -228,14 +228,14 @@ func (recSys *MovielensRec) SampleGenerator(_ context.Context) (ret <-chan rcmd.
 			i++
 			var (
 				userId, movieId int
-				rating, label   float64
+				rating, label   float32
 				timestamp       int64
 			)
 			if err = rows.Scan(&userId, &movieId, &rating, &timestamp); err != nil {
 				log.Errorf("failed to scan ratings: %v", err)
 				return
 			}
-			label = BinarizeLabel(rating)
+			label = BinarizeLabel32(rating)
 			// label = rating / 5.0
 
 			sampleCh <- rcmd.Sample{
@@ -268,18 +268,18 @@ func (recSys *MovielensRec) PreTrain(ctx context.Context) (err error) {
 		return
 	}
 	defer rows1.Close()
-	recSys.mRatingMap = make(map[int][2]float64)
+	recSys.mRatingMap = make(map[int][2]float32)
 	for rows1.Next() {
 		var (
 			movieId int
-			avgR    float64
+			avgR    float32
 			cntR    int
 		)
 		if err = rows1.Scan(&movieId, &avgR, &cntR); err != nil {
 			log.Errorf("failed to scan movieId: %v", err)
 			return
 		}
-		recSys.mRatingMap[movieId] = [2]float64{avgR, float64(cntR)}
+		recSys.mRatingMap[movieId] = [2]float32{avgR, float32(cntR)}
 	}
 
 	// fill user behavior cache
@@ -384,6 +384,13 @@ func (recSys *MovielensRec) GetDashboardOverview(ctx context.Context) (res rcmd.
 }
 
 func BinarizeLabel(rating float64) float64 {
+	if rating > 3.5 {
+		return 1.0
+	}
+	return 0.0
+}
+
+func BinarizeLabel32(rating float32) float32 {
 	if rating > 3.5 {
 		return 1.0
 	}

@@ -10,11 +10,10 @@ import (
 	"github.com/auxten/edgeRec/feature/embedding"
 	"github.com/auxten/edgeRec/feature/embedding/model"
 	"github.com/auxten/edgeRec/feature/embedding/model/word2vec"
-	"github.com/auxten/edgeRec/ps"
 	"github.com/auxten/edgeRec/utils"
 	"github.com/karlseguin/ccache/v2"
 	log "github.com/sirupsen/logrus"
-	"gonum.org/v1/gonum/mat"
+	"gorgonia.org/tensor"
 )
 
 const (
@@ -30,7 +29,7 @@ const (
 
 var (
 	itemEmbeddingModel model.Model
-	itemEmbeddingMap   word2vec.EmbeddingMap
+	itemEmbeddingMap   word2vec.EmbeddingMap32
 	//TODO: maybe a switch to control whether to reuse training cache when predict
 	UserFeatureCache  *ccache.Cache
 	ItemFeatureCache  *ccache.Cache
@@ -38,14 +37,14 @@ var (
 
 	// DefaultUserFeature and DefaultItemFeature are backup if not nil
 	//when user or item missing in database, use this to fill
-	DefaultUserFeature []float64
-	DefaultItemFeature []float64
+	DefaultUserFeature []float32
+	DefaultItemFeature []float32
 
 	DebugUserId int
 	DebugItemId int
 )
 
-type Tensor []float64
+type Tensor []float32
 
 type Stage int
 
@@ -55,13 +54,17 @@ const (
 )
 
 type TrainSample struct {
-	Data ps.Samples
+	X     []float32
+	Y     []float32
+	Rows  int
+	XCols int
+
 	Info SampleInfo
 }
 
 type sampleVec struct {
-	vec    []float64
-	label  float64
+	vec    []float32
+	label  float32
 	iWidth int
 	uWidth int
 }
@@ -82,7 +85,7 @@ type BasicFeatureProvider interface {
 }
 
 type PredictAbstract interface {
-	Predict(X mat.Matrix, Y mat.Mutable) *mat.Dense
+	Predict(X tensor.Tensor) tensor.Tensor
 }
 
 type Trainer interface {
@@ -180,13 +183,13 @@ type PreTrainer interface {
 
 type ItemScore struct {
 	ItemId int     `json:"itemId"`
-	Score  float64 `json:"score"`
+	Score  float32 `json:"score"`
 }
 
 type Sample struct {
 	UserId    int     `json:"userId"`
 	ItemId    int     `json:"itemId"`
-	Label     float64 `json:"label"`
+	Label     float32 `json:"label"`
 	Timestamp int64   `json:"timestamp"`
 }
 
@@ -207,7 +210,7 @@ func Train(ctx context.Context, recSys RecSys, mlp Fitter) (model Predictor, err
 			log.Errorf("get item embedding model error: %v", err)
 			return
 		}
-		itemEmbeddingMap, err = itemEmbeddingModel.GenEmbeddingMap()
+		itemEmbeddingMap, err = itemEmbeddingModel.GenEmbeddingMap32()
 		if err != nil {
 			log.Errorf("get item embedding map error: %v", err)
 			return
@@ -215,10 +218,13 @@ func Train(ctx context.Context, recSys RecSys, mlp Fitter) (model Predictor, err
 	}
 
 	trainSample, err := GetSample(recSys, ctx)
-	sampleLen := len(trainSample.Data)
+	if err != nil {
+		log.Errorf("get train sample error: %v", err)
+		return
+	}
 
 	// start training
-	log.Infof("\nstart training with %d samples\n", sampleLen)
+	log.Infof("\nstart training with %d x %d samples\n", trainSample.Rows, trainSample.XCols)
 
 	pred, err := mlp.Fit(trainSample)
 	if err != nil {
@@ -253,17 +259,22 @@ func Rank(ctx context.Context, recSys Predictor, userId int, itemIds []int) (ite
 		return
 	}
 	itemScores = make([]ItemScore, len(itemIds))
+	var score interface{}
 	for i, itemId := range itemIds {
+		if score, err = y.At(i, 0); err != nil {
+			itemScores = nil
+			return
+		}
 		itemScores[i] = ItemScore{
 			ItemId: itemId,
-			Score:  y.At(i, 0),
+			Score:  score.(float32),
 		}
 	}
 
 	return
 }
 
-func BatchPredict(ctx context.Context, recSys Predictor, sampleKeys []Sample) (y *mat.Dense, err error) {
+func BatchPredict(ctx context.Context, recSys Predictor, sampleKeys []Sample) (y tensor.Tensor, err error) {
 	ctx = context.WithValue(ctx, StageKey, PredictStage)
 	if preRanker, ok := recSys.(PreRanker); ok {
 		err = preRanker.PreRank(ctx)
@@ -273,16 +284,16 @@ func BatchPredict(ctx context.Context, recSys Predictor, sampleKeys []Sample) (y
 		}
 	}
 
-	y = mat.NewDense(len(sampleKeys), 1, nil)
 	var (
-		x          *mat.Dense
-		zeroSliceX []float64
+		xData      []float32
+		xWidth     int
+		zeroSliceX []float32
 		debugIds   = make([]int, 0)
 	)
 
 	for i, sKey := range sampleKeys {
 		var (
-			xSlice []float64
+			xSlice []float32
 		)
 		xSlice, _, _, err = GetSampleVector(ctx, UserFeatureCache, ItemFeatureCache, recSys, &sKey)
 		if err != nil {
@@ -290,37 +301,43 @@ func BatchPredict(ctx context.Context, recSys Predictor, sampleKeys []Sample) (y
 				log.Errorf("get sample vector error: %v", err)
 				return
 			} else {
-				_, col := x.Dims()
-				zeroSliceX = make([]float64, col)
+				zeroSliceX = make([]float32, xWidth)
 				xSlice = zeroSliceX
 			}
 		}
 		if i == 0 {
-			x = mat.NewDense(len(sampleKeys), len(xSlice), nil)
+			xWidth = len(xSlice)
+			xData = make([]float32, len(sampleKeys)*xWidth)
 		}
 
-		_, xCol := x.Dims()
-		if len(xSlice) != xCol {
-			log.Errorf("x slice length %d != x col %d", len(xSlice), xCol)
+		if len(xSlice) != xWidth {
+			log.Errorf("x slice length %d != x col %d", len(xSlice), xWidth)
 			return
 		}
-		x.SetRow(i, xSlice)
+		copy(xData[i*xWidth:], xSlice)
+
 		if DebugItemId == sKey.ItemId &&
 			(DebugUserId == 0 || DebugUserId == sKey.UserId) {
 			log.Infof("user %d: item %d: feature %v", sKey.UserId, sKey.ItemId, xSlice)
 			debugIds = append(debugIds, i)
 		}
 	}
-	recSys.Predict(x, y)
+	xDense := tensor.NewDense(tensor.Float32, tensor.Shape{len(sampleKeys), xWidth}, tensor.WithBacking(xData))
+
+	y = recSys.Predict(xDense)
 	for _, i := range debugIds {
-		log.Infof("user %d: item %d: score %v", sampleKeys[i].UserId, sampleKeys[i].ItemId, y.At(i, 0))
+		score, er := y.At(i, 0)
+		if er != nil {
+			log.Errorf("get score of line:%d error: %v", i, er)
+			return
+		}
+		log.Infof("user %d: item %d: score %v", sampleKeys[i].UserId, sampleKeys[i].ItemId, score)
 	}
 	return
 }
 
 func GetSample(recSys RecSys, ctx context.Context) (sample *TrainSample, err error) {
 	var (
-		sampleWidth      int
 		userFeatureWidth int
 		itemFeatureWidth int
 	)
@@ -409,25 +426,34 @@ func GetSample(recSys RecSys, ctx context.Context) (sample *TrainSample, err err
 			return
 		}
 
-		if sampleWidth == 0 {
-			sampleWidth = len(sv.vec)
+		if sample.XCols == 0 {
+			sample.XCols = len(sv.vec)
 		} else {
-			if len(sv.vec) != sampleWidth {
-				err = fmt.Errorf("sample width mismatch: %v:%v", sampleWidth, len(sv.vec))
+			if len(sv.vec) != sample.XCols {
+				err = fmt.Errorf("sample width mismatch: %v:%v", sample.XCols, len(sv.vec))
 				return
 			}
 		}
 
-		sample.Data = append(sample.Data, ps.Sample{
-			Input:    sv.vec,
-			Response: []float64{sv.label},
-		})
-		if len(sample.Data)%1000 == 0 {
-			log.Infof("sample size: %d, uc: %d, ic: %d", len(sample.Data),
+		sample.X = append(sample.X, sv.vec...)
+		sample.Y = append(sample.Y, sv.label)
+		sample.Rows++
+		if sample.Rows%1000 == 0 {
+			log.Infof("sample size: %d, uc: %d, ic: %d", sample.Rows,
 				UserFeatureCache.ItemCount(),
 				ItemFeatureCache.ItemCount(),
 			)
 		}
+	}
+
+	//check x and y dimension
+	if sample.Rows != len(sample.Y) {
+		err = fmt.Errorf("sample rows not match: %v:%v", sample.Rows, len(sample.Y))
+		return
+	}
+	if sample.Rows*sample.XCols != len(sample.X) {
+		err = fmt.Errorf("sample x size not match: %v:%v", sample.Rows*sample.XCols, len(sample.X))
+		return
 	}
 
 	return
@@ -436,10 +462,10 @@ func GetSample(recSys RecSys, ctx context.Context) (sample *TrainSample, err err
 func GetSampleVector(ctx context.Context,
 	userFeatureCache *ccache.Cache, itemFeatureCache *ccache.Cache,
 	featureProvider BasicFeatureProvider, sampleKey *Sample,
-) (vec []float64, userFeatureWidth int, itemFeatureWidth int, err error) {
+) (vec []float32, userFeatureWidth int, itemFeatureWidth int, err error) {
 	var (
-		zeroItemEmb       [ItemEmbDim]float64
-		zeroUserBehaviors [ItemEmbDim * UserBehaviorLen]float64
+		zeroItemEmb       [ItemEmbDim]float32
+		zeroUserBehaviors [ItemEmbDim * UserBehaviorLen]float32
 
 		user, item *ccache.Item
 	)
@@ -504,7 +530,7 @@ func GetSampleVector(ctx context.Context,
 		}
 	}
 
-	vec = utils.ConcatSlice(userFeature, userBehaviors, itemEmb, itemFeature)
+	vec = utils.ConcatSlice32(userFeature, userBehaviors, itemEmb, itemFeature)
 
 	return
 }

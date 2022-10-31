@@ -6,10 +6,9 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/auxten/edgeRec/nn/metrics"
+	"github.com/auxten/edgeRec/model/din"
 	rcmd "github.com/auxten/edgeRec/recommend"
 	. "github.com/smartystreets/goconvey/convey"
-	"gonum.org/v1/gonum/mat"
 )
 
 type dinPredictor struct {
@@ -52,9 +51,9 @@ func TestDinOnMovielens(t *testing.T) {
 		var (
 			userId     int
 			itemId     int
-			rating     float64
+			rating     float32
 			timestamp  int64
-			yTrue      = mat.NewDense(testCount, 1, nil)
+			yTrue      []float32
 			sampleKeys = make([]rcmd.Sample, 0, testCount)
 		)
 		for i := 0; rows.Next(); i++ {
@@ -62,7 +61,8 @@ func TestDinOnMovielens(t *testing.T) {
 			if err != nil {
 				t.Errorf("scan error: %v", err)
 			}
-			yTrue.Set(i, 0, BinarizeLabel(rating))
+			//yTrue.Set(i, 0, BinarizeLabel(rating))
+			yTrue = append(yTrue, BinarizeLabel32(rating))
 			sampleKeys = append(sampleKeys, rcmd.Sample{userId, itemId, 0, timestamp})
 		}
 		batchPredictCtx := context.Background()
@@ -73,8 +73,9 @@ func TestDinOnMovielens(t *testing.T) {
 		}
 		yPred, err := rcmd.BatchPredict(batchPredictCtx, dinPred, sampleKeys)
 		So(err, ShouldBeNil)
-		rocAuc := metrics.ROCAUCScore(yTrue, yPred, "", nil)
-		rowCount, _ := yTrue.Dims()
+		rocAuc := din.RocAuc32(yPred.Data().([]float32), yTrue)
+		//rocAuc := metrics.ROCAUCScore(yTrue, yPred, "", nil)
+		rowCount := len(yTrue)
 		fmt.Printf("rocAuc on test set %d: %f\n", rowCount, rocAuc)
 	})
 }

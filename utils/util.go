@@ -19,6 +19,14 @@ func ConcatSlice(slices ...[]float64) []float64 {
 	return result
 }
 
+func ConcatSlice32(slices ...[]float32) []float32 {
+	result := make([]float32, 0)
+	for _, slice := range slices {
+		result = append(result, slice...)
+	}
+	return result
+}
+
 func Float64toBytes(f float64) []byte {
 	bits := math.Float64bits(f)
 	bytes := make([]byte, 8)
