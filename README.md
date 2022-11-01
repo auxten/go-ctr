@@ -6,15 +6,25 @@ Deep Learning(Item2vec Embedding + MLP) based Feature-Engineering & Training & P
 
 # Models implemented
 
-- [x] [Simple 2 layer MLP](./model/mlp/mlp.go)
+### [Simple 2 layer MLP](./model/mlp/mlp.go)
+
+Progress:
   - [x] [Simple 2 layer MLP test on MovieLens](./example/movielens/feature_test.go)
   - [x] Dropout and L2 regularization
   - [x] Batch Normalization
-- [x] [YouTube DNN](./model/youtube/dnn.go)
+
+### [YouTube DNN](./model/youtube/dnn.go)
+![youtube-dnn](./art/youtube.png)
+
+Progress:
   - [x] [YouTube DNN test on MovieLens](./example/movielens/youtube_test.go)
   - [x] Dropout and L2 regularization
   - [ ] Batch Normalization
-- [x] [Deep Interest Network](./model/din/din.go)
+
+### [Deep Interest Network](./model/din/din.go)
+![din](./art/din.png) 
+
+Progress:
   - [x] [DIN test on MovieLens](./example/movielens/dinimpl_test.go)
   - [x] [Euclidean Distance based attention](model/din/activation.go)
   - [x] Dropout and L2 regularization
