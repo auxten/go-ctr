@@ -1,4 +1,4 @@
-package movielens
+package mlp
 
 import (
 	"github.com/auxten/edgeRec/nn/base"
@@ -8,11 +8,11 @@ import (
 	"gorgonia.org/tensor"
 )
 
-type predWrap struct {
+type SimpleMlpPredWrap struct {
 	pred base.Predicter
 }
 
-func (p *predWrap) Predict(X tensor.Tensor) tensor.Tensor {
+func (p *SimpleMlpPredWrap) Predict(X tensor.Tensor) tensor.Tensor {
 	numPred := X.Shape()[0]
 	xWidth := X.Shape()[1]
 	//convert float32 tensor to float64 mat.Dense
@@ -38,11 +38,11 @@ func (p *predWrap) Predict(X tensor.Tensor) tensor.Tensor {
 	return tensor.NewDense(tensor.Float32, tensor.Shape{numPred, 1}, tensor.WithBacking(y))
 }
 
-type fitWrap struct {
-	model *nn.MLPClassifier
+type SimpleMlpFitWrap struct {
+	Model *nn.MLPClassifier
 }
 
-func (fit *fitWrap) Fit(trainSample *rcmd.TrainSample) (rcmd.PredictAbstract, error) {
+func (fit *SimpleMlpFitWrap) Fit(trainSample *rcmd.TrainSample) (rcmd.PredictAbstract, error) {
 	sampleLen := trainSample.Rows
 	x64 := make([]float64, sampleLen*trainSample.XCols)
 	for i := 0; i < sampleLen; i++ {
@@ -57,9 +57,9 @@ func (fit *fitWrap) Fit(trainSample *rcmd.TrainSample) (rcmd.PredictAbstract, er
 		yClass.Set(i, 0, float64(sample))
 	}
 
-	pred := fit.model.Fit(sampleDense, yClass)
+	pred := fit.Model.Fit(sampleDense, yClass)
 
-	return &predWrap{
+	return &SimpleMlpPredWrap{
 		pred: pred.(base.Predicter),
 	}, nil
 }

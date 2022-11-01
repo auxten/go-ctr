@@ -1,10 +1,13 @@
-package din
+package model_test
 
 import (
 	"math"
 	"math/rand"
 	"testing"
 
+	"github.com/auxten/edgeRec/model"
+	"github.com/auxten/edgeRec/model/din"
+	"github.com/auxten/edgeRec/model/youtube"
 	rcmd "github.com/auxten/edgeRec/recommend"
 	"github.com/auxten/edgeRec/utils"
 	log "github.com/sirupsen/logrus"
@@ -76,9 +79,9 @@ func TestMultiModel(t *testing.T) {
 	labels := tensor.New(tensor.WithShape(numExamples, 1), tensor.WithBacking(labelSlice))
 	//log.Debugf("labels: %+v", labels.Data())
 
-	dinModel := NewDinNet(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim)
+	dinModel := din.NewDinNet(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim)
 	Convey("Din model", t, func() {
-		err := Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim,
+		err := model.Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim,
 			numExamples, batchSize, epochs, 0,
 			sampleInfo,
 			inputs, labels,
@@ -87,19 +90,19 @@ func TestMultiModel(t *testing.T) {
 		So(err, ShouldBeNil)
 	})
 
-	var dinPredict *DinNet
+	var dinPredict *din.DinNet
 	Convey("Din model marshal and new from json", t, func() {
 		dinJson, err := dinModel.Marshal()
 		So(err, ShouldBeNil)
 		//log.Debugf("dinJson: %s", dinJson)
-		dinPredict, err = NewDinNetFromJson(dinJson)
+		dinPredict, err = din.NewDinNetFromJson(dinJson)
 		So(err, ShouldBeNil)
 	})
 
 	Convey("Din predict", t, func() {
-		err := InitForwardOnlyVm(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim, testBatchSize, dinPredict)
+		err := model.InitForwardOnlyVm(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim, testBatchSize, dinPredict)
 		So(err, ShouldBeNil)
-		predictions, err := Predict(dinPredict, testSamples, testBatchSize, sampleInfo, inputs)
+		predictions, err := model.Predict(dinPredict, testSamples, testBatchSize, sampleInfo, inputs)
 		So(err, ShouldBeNil)
 		So(predictions, ShouldNotBeNil)
 		So(predictions, ShouldHaveLength, testSamples)
@@ -109,30 +112,30 @@ func TestMultiModel(t *testing.T) {
 		So(auc, ShouldBeGreaterThan, 0.5)
 	})
 
-	mlpModel := NewSimpleMLP(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim)
-	Convey("Simple MLP", t, func() {
-		err := Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim,
+	youtubeDnnModel := youtube.NewYoutubeDnn(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim)
+	Convey("Youtube DNN", t, func() {
+		err := model.Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim,
 			numExamples, batchSize, epochs, 10,
 			sampleInfo,
 			inputs, labels,
-			mlpModel,
+			youtubeDnnModel,
 		)
 		So(err, ShouldBeNil)
 	})
 
-	var mlpPredict *SimpleMLP
-	Convey("Simple MLP marshal and new from json", t, func() {
-		mlpJson, err := mlpModel.Marshal()
+	var yDnnPredict *youtube.YoutubeDnn
+	Convey("Youtube DNN marshal and new from json", t, func() {
+		mlpJson, err := youtubeDnnModel.Marshal()
 		So(err, ShouldBeNil)
 		//log.Debugf("mlpJson: %s", mlpJson)
-		mlpPredict, err = NewSimpleMLPFromJson(mlpJson)
+		yDnnPredict, err = youtube.NewYoutubeDnnFromJson(mlpJson)
 		So(err, ShouldBeNil)
 	})
 
-	Convey("Simple MLP predict", t, func() {
-		err := InitForwardOnlyVm(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim, testBatchSize, mlpPredict)
+	Convey("Youtube DNN predict", t, func() {
+		err := model.InitForwardOnlyVm(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim, testBatchSize, yDnnPredict)
 		So(err, ShouldBeNil)
-		predictions, err := Predict(mlpPredict, testSamples, testBatchSize, sampleInfo, inputs)
+		predictions, err := model.Predict(yDnnPredict, testSamples, testBatchSize, sampleInfo, inputs)
 		So(err, ShouldBeNil)
 		So(predictions, ShouldNotBeNil)
 		So(predictions, ShouldHaveLength, testSamples)

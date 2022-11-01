@@ -1,13 +1,21 @@
-package din
+package youtube
 
 import (
 	"encoding/json"
 
+	"github.com/auxten/edgeRec/model"
 	G "gorgonia.org/gorgonia"
 	"gorgonia.org/tensor"
 )
 
-type SimpleMLP struct {
+const (
+	// magic numbers for din paper
+	att0_1 = 36
+	mlp0_1 = 200
+	mlp1_2 = 80
+)
+
+type YoutubeDnn struct {
 	g  *G.ExprGraph
 	vm G.VM
 
@@ -23,7 +31,7 @@ type SimpleMLP struct {
 	out              *G.Node
 }
 
-func (mlp *SimpleMLP) In() G.Nodes {
+func (mlp *YoutubeDnn) In() G.Nodes {
 	return G.Nodes{mlp.xUserProfile, mlp.xUbMatrix, mlp.xItemFeature, mlp.xCtxFeature}
 }
 
@@ -38,7 +46,7 @@ type mlpModel struct {
 	Mlp2          []float32 `json:"mlp2"`
 }
 
-func (mlp *SimpleMLP) Marshal() (data []byte, err error) {
+func (mlp *YoutubeDnn) Marshal() (data []byte, err error) {
 	model := mlpModel{
 		UProfileDim:   mlp.uProfileDim,
 		UBehaviorSize: mlp.uBehaviorSize,
@@ -52,7 +60,7 @@ func (mlp *SimpleMLP) Marshal() (data []byte, err error) {
 	return json.Marshal(model)
 }
 
-func NewSimpleMLPFromJson(data []byte) (mlp *SimpleMLP, err error) {
+func NewYoutubeDnnFromJson(data []byte) (mlp *YoutubeDnn, err error) {
 	var m mlpModel
 	if err = json.Unmarshal(data, &m); err != nil {
 		return
@@ -64,28 +72,28 @@ func NewSimpleMLPFromJson(data []byte) (mlp *SimpleMLP, err error) {
 		uBehaviorDim  = m.UBehaviorDim
 		iFeatureDim   = m.IFeatureDim
 		cFeatureDim   = m.CFeatureDim
-		mlp0_0        = uProfileDim + uBehaviorSize*uBehaviorDim + iFeatureDim + cFeatureDim
+		mlp0_0        = uProfileDim + uBehaviorDim + iFeatureDim + cFeatureDim
 	)
 
-	mlp0 := G.NewMatrix(g, DT,
+	mlp0 := G.NewMatrix(g, model.DT,
 		G.WithShape(mlp0_0, mlp0_1),
 		G.WithName("mlp0"),
 		G.WithValue(tensor.New(tensor.WithShape(mlp0_0, mlp0_1), tensor.WithBacking(m.Mlp0))),
 	)
 
-	mlp1 := G.NewMatrix(g, DT,
+	mlp1 := G.NewMatrix(g, model.DT,
 		G.WithShape(mlp0_1, mlp1_2),
 		G.WithName("mlp1"),
 		G.WithValue(tensor.New(tensor.WithShape(mlp0_1, mlp1_2), tensor.WithBacking(m.Mlp1))),
 	)
 
-	mlp2 := G.NewMatrix(g, DT,
+	mlp2 := G.NewMatrix(g, model.DT,
 		G.WithShape(mlp1_2, 1),
 		G.WithName("mlp2"),
 		G.WithValue(tensor.New(tensor.WithShape(mlp1_2, 1), tensor.WithBacking(m.Mlp2))),
 	)
 
-	mlp = &SimpleMLP{
+	mlp = &YoutubeDnn{
 		uProfileDim:   uProfileDim,
 		uBehaviorSize: uBehaviorSize,
 		uBehaviorDim:  uBehaviorDim,
@@ -100,24 +108,24 @@ func NewSimpleMLPFromJson(data []byte) (mlp *SimpleMLP, err error) {
 	return
 }
 
-func (mlp *SimpleMLP) Vm() G.VM {
+func (mlp *YoutubeDnn) Vm() G.VM {
 	return mlp.vm
 }
 
-func (mlp *SimpleMLP) SetVM(vm G.VM) {
+func (mlp *YoutubeDnn) SetVM(vm G.VM) {
 	mlp.vm = vm
 }
 
-func NewSimpleMLP(
+func NewYoutubeDnn(
 	uProfileDim, uBehaviorSize, uBehaviorDim int,
 	iFeatureDim int,
 	cFeatureDim int,
-) (mlp *SimpleMLP) {
+) (mlp *YoutubeDnn) {
 	g := G.NewGraph()
-	mlp0 := G.NewMatrix(g, G.Float32, G.WithShape(uProfileDim+uBehaviorSize*uBehaviorDim+iFeatureDim+cFeatureDim, mlp0_1), G.WithName("mlp0"), G.WithInit(G.Gaussian(0, 1.0)))
+	mlp0 := G.NewMatrix(g, G.Float32, G.WithShape(uProfileDim+uBehaviorDim+iFeatureDim+cFeatureDim, mlp0_1), G.WithName("mlp0"), G.WithInit(G.Gaussian(0, 1.0)))
 	mlp1 := G.NewMatrix(g, G.Float32, G.WithShape(mlp0_1, mlp1_2), G.WithName("mlp1"), G.WithInit(G.Gaussian(0, 1.0)))
 	mlp2 := G.NewMatrix(g, G.Float32, G.WithShape(mlp1_2, 1), G.WithName("mlp2"), G.WithInit(G.Gaussian(0, 1.0)))
-	return &SimpleMLP{
+	return &YoutubeDnn{
 		uProfileDim:   uProfileDim,
 		uBehaviorSize: uBehaviorSize,
 		uBehaviorDim:  uBehaviorDim,
@@ -133,25 +141,33 @@ func NewSimpleMLP(
 	}
 }
 
-func (mlp *SimpleMLP) Graph() *G.ExprGraph {
+func (mlp *YoutubeDnn) Graph() *G.ExprGraph {
 	return mlp.g
 }
 
-func (mlp *SimpleMLP) Out() *G.Node {
+func (mlp *YoutubeDnn) Out() *G.Node {
 	return mlp.out
 }
 
-func (mlp *SimpleMLP) learnable() G.Nodes {
+func (mlp *YoutubeDnn) Learnable() G.Nodes {
 	return G.Nodes{mlp.mlp0, mlp.mlp1, mlp.mlp2}
 }
 
-func (mlp *SimpleMLP) Fwd(xUserProfile, ubMatrix, xItemFeature, xCtxFeature *G.Node, batchSize, uBehaviorSize, uBehaviorDim int) (err error) {
+//Fwd ...
+// xUserProfile: [batchSize, userProfileDim]
+// xUbMatrix: [batchSize, uBehaviorSize* uBehaviorDim]
+// xUserBehaviors: [batchSize, uBehaviorSize, uBehaviorDim]
+// xItemFeature: [batchSize, iFeatureDim]
+// xContextFeature: [batchSize, cFeatureDim]
+func (mlp *YoutubeDnn) Fwd(xUserProfile, ubMatrix, xItemFeature, xCtxFeature *G.Node, batchSize, uBehaviorSize, uBehaviorDim int) (err error) {
 	// user behaviors
-	xUserBehaviors := G.Must(G.Reshape(ubMatrix, tensor.Shape{batchSize, uBehaviorSize * uBehaviorDim}))
-	// item feature
-	// context feature
+	xUserBehaviors := G.Must(G.Reshape(ubMatrix, tensor.Shape{batchSize, uBehaviorSize, uBehaviorDim}))
+
+	//avg pooling for user behaviors
+	xUserBehaviorAvg := G.Must(G.Mean(xUserBehaviors, 1))
+
 	// concat
-	x := G.Must(G.Concat(1, xUserProfile, xUserBehaviors, xItemFeature, xCtxFeature))
+	x := G.Must(G.Concat(1, xUserProfile, xUserBehaviorAvg, xItemFeature, xCtxFeature))
 	// mlp
 	mlp0Out := G.Must(G.Sigmoid(G.Must(G.Mul(x, mlp.mlp0))))
 	mlp0Out = G.Must(G.Dropout(mlp0Out, float64(mlp.d0)))
