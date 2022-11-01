@@ -34,10 +34,11 @@ func TestDinOnMovielens(t *testing.T) {
 
 	Convey("Train din model", t, func() {
 		dinModel := &dinImpl{
+			//PredBatchSize: 5000,
 			PredBatchSize: 100,
 			//BatchSize:     5000,
 			BatchSize: 200,
-			epochs:    100,
+			epochs:    200,
 			earlyStop: 20,
 		}
 		trainCtx := context.Background()
