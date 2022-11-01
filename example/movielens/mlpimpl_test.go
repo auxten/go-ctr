@@ -6,8 +6,8 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/auxten/edgeRec/model/din"
 	rcmd "github.com/auxten/edgeRec/recommend"
+	"github.com/auxten/edgeRec/utils"
 	. "github.com/smartystreets/goconvey/convey"
 )
 
@@ -70,7 +70,7 @@ func TestSimpleMLPOnMovielens(t *testing.T) {
 		}
 		yPred, err := rcmd.BatchPredict(batchPredictCtx, dinPred, sampleKeys)
 		So(err, ShouldBeNil)
-		rocAuc := din.RocAuc32(yPred.Data().([]float32), yTrue)
+		rocAuc := utils.RocAuc32(yPred.Data().([]float32), yTrue)
 		rowCount := len(yTrue)
 		fmt.Printf("rocAuc on test set %d: %f\n", rowCount, rocAuc)
 	})

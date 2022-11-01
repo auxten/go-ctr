@@ -6,8 +6,8 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/auxten/edgeRec/model/din"
 	rcmd "github.com/auxten/edgeRec/recommend"
+	"github.com/auxten/edgeRec/utils"
 	. "github.com/smartystreets/goconvey/convey"
 )
 
@@ -32,8 +32,8 @@ func TestDinOnMovielens(t *testing.T) {
 
 	Convey("Train din model", t, func() {
 		dinModel := &dinImpl{
-			predBatchSize: 100,
-			batchSize:     200,
+			PredBatchSize: 100,
+			BatchSize:     200,
 			epochs:        100,
 			earlyStop:     20,
 		}
@@ -73,7 +73,7 @@ func TestDinOnMovielens(t *testing.T) {
 		}
 		yPred, err := rcmd.BatchPredict(batchPredictCtx, dinPred, sampleKeys)
 		So(err, ShouldBeNil)
-		rocAuc := din.RocAuc32(yPred.Data().([]float32), yTrue)
+		rocAuc := utils.RocAuc32(yPred.Data().([]float32), yTrue)
 		//rocAuc := metrics.ROCAUCScore(yTrue, yPred, "", nil)
 		rowCount := len(yTrue)
 		fmt.Printf("rocAuc on test set %d: %f\n", rowCount, rocAuc)

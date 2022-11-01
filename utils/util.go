@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"gonum.org/v1/gonum/integrate"
-	"gonum.org/v1/gonum/stat"
+	"github.com/auxten/edgeRec/nn/metrics"
+	"gonum.org/v1/gonum/mat"
 )
 
 func ConcatSlice(slices ...[]float64) []float64 {
@@ -68,11 +68,6 @@ func TopNOccurrences(s []string, n int) []KeyCnt {
 	return l1[:n]
 }
 
-func RocAuc(label []bool, y []float64) float64 {
-	tpr, fpr, _ := stat.ROC(nil, y, label, nil)
-	return integrate.Trapezoidal(fpr, tpr)
-}
-
 func ParseInt64Seq(s string) []int64 {
 	var (
 		seq []int64
@@ -96,4 +91,58 @@ func Int64SeqToIntSeq(seq []int64) []int {
 		result[i] = int(v)
 	}
 	return result
+}
+
+func Accuracy(prediction, y []float64) float64 {
+	var ok float64
+	for i := 0; i < len(prediction); i++ {
+		if math.Round(float64(prediction[i]-y[i])) == 0 {
+			ok += 1.0
+		}
+	}
+	return ok / float64(len(y))
+}
+
+func Accuracy32(prediction, y []float32) float32 {
+	var ok float32
+	for i := 0; i < len(prediction); i++ {
+		if math.Round(float64(prediction[i]-y[i])) == 0 {
+			ok += 1.0
+		}
+	}
+	return ok / float32(len(y))
+}
+
+func RocAuc(pred, y []float64) float64 {
+	boolY := make([]float64, len(y))
+	for i := 0; i < len(y); i++ {
+		if y[i] > 0.5 {
+			boolY[i] = 1.0
+		} else {
+			boolY[i] = 0.0
+		}
+	}
+	yTrue := mat.NewDense(len(y), 1, boolY)
+	yScore := mat.NewDense(len(pred), 1, pred)
+
+	return metrics.ROCAUCScore(yTrue, yScore, "", nil)
+}
+
+func RocAuc32(pred, y []float32) float32 {
+	boolY := make([]float64, len(y))
+	for i := 0; i < len(y); i++ {
+		if y[i] > 0.5 {
+			boolY[i] = 1.0
+		} else {
+			boolY[i] = 0.0
+		}
+	}
+	pred64 := make([]float64, len(pred))
+	for i := 0; i < len(pred); i++ {
+		pred64[i] = float64(pred[i])
+	}
+	yTrue := mat.NewDense(len(y), 1, boolY)
+	yScore := mat.NewDense(len(pred), 1, pred64)
+
+	return float32(metrics.ROCAUCScore(yTrue, yScore, "", nil))
 }

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	rcmd "github.com/auxten/edgeRec/recommend"
+	"github.com/auxten/edgeRec/utils"
 	log "github.com/sirupsen/logrus"
 	. "github.com/smartystreets/goconvey/convey"
 	"gorgonia.org/tensor"
@@ -103,7 +104,7 @@ func TestMultiModel(t *testing.T) {
 		So(predictions, ShouldNotBeNil)
 		So(predictions, ShouldHaveLength, testSamples)
 		log.Debugf("predictions: %+v", predictions)
-		auc := RocAuc32(predictions, labels.Data().([]float32)[:testSamples])
+		auc := utils.RocAuc32(predictions, labels.Data().([]float32)[:testSamples])
 		log.Debugf("auc: %f", auc)
 		So(auc, ShouldBeGreaterThan, 0.5)
 	})
@@ -136,7 +137,7 @@ func TestMultiModel(t *testing.T) {
 		So(predictions, ShouldNotBeNil)
 		So(predictions, ShouldHaveLength, testSamples)
 		log.Debugf("predictions: %+v", predictions)
-		auc := RocAuc32(predictions, labels.Data().([]float32)[:testSamples])
+		auc := utils.RocAuc32(predictions, labels.Data().([]float32)[:testSamples])
 		log.Debugf("auc: %f", auc)
 		So(auc, ShouldBeGreaterThan, 0.5)
 	})
