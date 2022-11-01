@@ -4,16 +4,14 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/auxten/edgeRec/nn/metrics"
 	rcmd "github.com/auxten/edgeRec/recommend"
 	log "github.com/sirupsen/logrus"
-	"gonum.org/v1/gonum/mat"
 	"gopkg.in/cheggaaa/pb.v1"
 	G "gorgonia.org/gorgonia"
 	"gorgonia.org/tensor"
 )
 
-var dt = tensor.Float64
+var DT = tensor.Float32
 
 const (
 	// magic numbers for din paper
@@ -41,12 +39,12 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 	m Model,
 ) (err error) {
 	g := m.Graph()
-	xUserProfile := G.NewMatrix(g, dt, G.WithShape(batchSize, uProfileDim), G.WithName("xUserProfile"))
-	//xUserBehaviors := G.NewTensor(g, dt, 3, G.WithShape(batchSize, uBehaviorSize, uBehaviorDim), G.WithName("xUserBehaviors"))
-	xUserBehaviorMatrix := G.NewMatrix(g, dt, G.WithShape(batchSize, uBehaviorSize*uBehaviorDim), G.WithName("xUserBehaviorMatrix"))
-	xItemFeature := G.NewMatrix(g, dt, G.WithShape(batchSize, iFeatureDim), G.WithName("xItemFeature"))
-	xCtxFeature := G.NewMatrix(g, dt, G.WithShape(batchSize, cFeatureDim), G.WithName("xCtxFeature"))
-	y := G.NewTensor(g, dt, 2, G.WithShape(batchSize, 1), G.WithName("y"))
+	xUserProfile := G.NewMatrix(g, DT, G.WithShape(batchSize, uProfileDim), G.WithName("xUserProfile"))
+	//xUserBehaviors := G.NewTensor(g, DT, 3, G.WithShape(batchSize, uBehaviorSize, uBehaviorDim), G.WithName("xUserBehaviors"))
+	xUserBehaviorMatrix := G.NewMatrix(g, DT, G.WithShape(batchSize, uBehaviorSize*uBehaviorDim), G.WithName("xUserBehaviorMatrix"))
+	xItemFeature := G.NewMatrix(g, DT, G.WithShape(batchSize, iFeatureDim), G.WithName("xItemFeature"))
+	xCtxFeature := G.NewMatrix(g, DT, G.WithShape(batchSize, cFeatureDim), G.WithName("xCtxFeature"))
+	y := G.NewTensor(g, DT, 2, G.WithShape(batchSize, 1), G.WithName("y"))
 	//m := NewDinNet(g, uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim)
 	if err = m.Fwd(xUserProfile, xUserBehaviorMatrix, xItemFeature, xCtxFeature, batchSize, uBehaviorSize, uBehaviorDim); err != nil {
 		log.Fatalf("%+v", err)
@@ -55,8 +53,8 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 	//losses := G.Must(G.HadamardProd(G.Must(G.Neg(G.Must(G.Log(m.out)))), y))
 	//losses := G.Must(G.Square(G.Must(G.Sub(m.Out(), y))))
 	positive := G.Must(G.HadamardProd(G.Must(G.Log(m.Out())), y))
-	negative := G.Must(G.HadamardProd(G.Must(G.Log(G.Must(G.Sub(G.NewConstant(float64(1.0+1e-8)), m.Out())))), G.Must(G.Sub(G.NewConstant(float64(1.0)), y))))
-	//negative := G.Must(G.Log(G.Must(G.Sub(G.NewConstant(float64(1.000000001)), m.Out()))))
+	negative := G.Must(G.HadamardProd(G.Must(G.Log(G.Must(G.Sub(G.NewConstant(float32(1.0+1e-8)), m.Out())))), G.Must(G.Sub(G.NewConstant(float32(1.0)), y))))
+	//negative := G.Must(G.Log(G.Must(G.Sub(G.NewConstant(float32(1.000000001)), m.Out()))))
 	cost := G.Must(G.Neg(G.Must(G.Mean(G.Must(G.Add(positive, negative))))))
 
 	// we want to track costs
@@ -93,11 +91,11 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 	)
 	m.SetVM(vm)
 
-	//solver := G.NewRMSPropSolver(G.WithBatchSize(float64(batchSize)))
-	//solver := G.NewVanillaSolver(G.WithBatchSize(float64(batchSize)), G.WithLearnRate(0.001))
-	//solver := G.NewBarzilaiBorweinSolver(G.WithBatchSize(float64(batchSize)), G.WithLearnRate(0.001))
-	//solver := G.NewAdaGradSolver(G.WithBatchSize(float64(batchSize)), G.WithLearnRate(0.001))
-	//solver := G.NewMomentum(G.WithBatchSize(float64(batchSize)), G.WithLearnRate(0.001))
+	//solver := G.NewRMSPropSolver(G.WithBatchSize(float32(batchSize)))
+	//solver := G.NewVanillaSolver(G.WithBatchSize(float32(batchSize)), G.WithLearnRate(0.001))
+	//solver := G.NewBarzilaiBorweinSolver(G.WithBatchSize(float32(batchSize)), G.WithLearnRate(0.001))
+	//solver := G.NewAdaGradSolver(G.WithBatchSize(float32(batchSize)), G.WithLearnRate(0.001))
+	//solver := G.NewMomentum(G.WithBatchSize(float32(batchSize)), G.WithLearnRate(0.001))
 	solver := G.NewAdamSolver(G.WithLearnRate(0.01), G.WithBatchSize(float64(batchSize)), G.WithL2Reg(0.0001))
 	//defer func() {
 	//	vm.Close()
@@ -107,10 +105,13 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 	// handlePprof(sigChan, doneChan)
 
 	batches := numExamples / batchSize
+	if numExamples%batchSize != 0 {
+		batches++
+	}
 	log.Printf("Batches %d", batches)
 	bar := pb.New(batches)
 	var (
-		bestCost  = math.MaxFloat64
+		bestCost  float32 = math.MaxFloat32
 		noImprove int
 	)
 
@@ -139,12 +140,22 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 			if xUserProfileVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.UserProfileRange[0], si.UserProfileRange[1])}...); err != nil {
 				log.Fatalf("Unable to slice xUserProfileVal %v", err)
 			}
+			if xUserProfileVal.Shape()[0] < batchSize {
+				if xUserProfileVal, err = FillTensorRows(batchSize, xUserProfileVal); err != nil {
+					log.Fatalf("Unable to fill sample rows %v", err)
+				}
+			}
 			if err = G.Let(xUserProfile, xUserProfileVal); err != nil {
 				log.Fatalf("Unable to let xUserProfileVal %v", err)
 			}
 
 			if xUserBehaviorsVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.UserBehaviorRange[0], si.UserBehaviorRange[1])}...); err != nil {
 				log.Fatalf("Unable to slice xUserBehaviorsVal %v", err)
+			}
+			if xUserBehaviorsVal.Shape()[0] < batchSize {
+				if xUserBehaviorsVal, err = FillTensorRows(batchSize, xUserBehaviorsVal); err != nil {
+					log.Fatalf("Unable to fill sample rows %v", err)
+				}
 			}
 			if err = G.Let(xUserBehaviorMatrix, xUserBehaviorsVal); err != nil {
 				log.Fatalf("Unable to let xUserBehaviorsVal %v", err)
@@ -153,6 +164,11 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 			if xItemFeatureVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.ItemFeatureRange[0], si.ItemFeatureRange[1])}...); err != nil {
 				log.Fatalf("Unable to slice xItemFeatureVal %v", err)
 			}
+			if xItemFeatureVal.Shape()[0] < batchSize {
+				if xItemFeatureVal, err = FillTensorRows(batchSize, xItemFeatureVal); err != nil {
+					log.Fatalf("Unable to fill sample rows %v", err)
+				}
+			}
 			if err = G.Let(xItemFeature, xItemFeatureVal); err != nil {
 				log.Fatalf("Unable to let xItemFeatureVal %v", err)
 			}
@@ -160,12 +176,22 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 			if xCtxFeatureVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.CtxFeatureRange[0], si.CtxFeatureRange[1])}...); err != nil {
 				log.Fatalf("Unable to slice xCtxFeatureVal %v", err)
 			}
+			if xCtxFeatureVal.Shape()[0] < batchSize {
+				if xCtxFeatureVal, err = FillTensorRows(batchSize, xCtxFeatureVal); err != nil {
+					log.Fatalf("Unable to fill sample rows %v", err)
+				}
+			}
 			if err = G.Let(xCtxFeature, xCtxFeatureVal); err != nil {
 				log.Fatalf("Unable to let xCtxFeatureVal %v", err)
 			}
 
 			if yVal, err = targets.Slice(G.S(start, end)); err != nil {
 				log.Fatalf("Unable to slice y %v", err)
+			}
+			if yVal.Shape()[0] < batchSize {
+				if yVal, err = FillTensorRows(batchSize, yVal); err != nil {
+					log.Fatalf("Unable to fill sample rows %v", err)
+				}
 			}
 			if err = G.Let(y, yVal); err != nil {
 				log.Fatalf("Unable to let y %v", err)
@@ -180,7 +206,7 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 			vm.Reset()
 			bar.Increment()
 		}
-		costVal := cost.Value().Data().(float64)
+		costVal := cost.Value().Data().(float32)
 		if costVal < bestCost {
 			bestCost = costVal
 			noImprove = 0
@@ -202,10 +228,10 @@ func InitForwardOnlyVm(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cF
 	m Model,
 ) (err error) {
 	g := m.Graph()
-	xUserProfile := G.NewMatrix(g, dt, G.WithShape(batchSize, uProfileDim), G.WithName("xUserProfile"))
-	xUserBehaviorMatrix := G.NewMatrix(g, dt, G.WithShape(batchSize, uBehaviorSize*uBehaviorDim), G.WithName("xUserBehaviorMatrix"))
-	xItemFeature := G.NewMatrix(g, dt, G.WithShape(batchSize, iFeatureDim), G.WithName("xItemFeature"))
-	xCtxFeature := G.NewMatrix(g, dt, G.WithShape(batchSize, cFeatureDim), G.WithName("xCtxFeature"))
+	xUserProfile := G.NewMatrix(g, DT, G.WithShape(batchSize, uProfileDim), G.WithName("xUserProfile"))
+	xUserBehaviorMatrix := G.NewMatrix(g, DT, G.WithShape(batchSize, uBehaviorSize*uBehaviorDim), G.WithName("xUserBehaviorMatrix"))
+	xItemFeature := G.NewMatrix(g, DT, G.WithShape(batchSize, iFeatureDim), G.WithName("xItemFeature"))
+	xCtxFeature := G.NewMatrix(g, DT, G.WithShape(batchSize, cFeatureDim), G.WithName("xCtxFeature"))
 	if err = m.Fwd(xUserProfile, xUserBehaviorMatrix, xItemFeature, xCtxFeature,
 		batchSize, uBehaviorSize, uBehaviorDim); err != nil {
 		return
@@ -224,7 +250,7 @@ func InitForwardOnlyVm(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cF
 	return
 }
 
-func Predict(m Model, numExamples, batchSize int, si *rcmd.SampleInfo, inputs tensor.Tensor) (y []float64, err error) {
+func Predict(m Model, numExamples, batchSize int, si *rcmd.SampleInfo, inputs tensor.Tensor) (y []float32, err error) {
 	//input nodes
 	inputNodes := m.In()
 	xUserProfile := inputNodes[0]
@@ -239,8 +265,11 @@ func Predict(m Model, numExamples, batchSize int, si *rcmd.SampleInfo, inputs te
 	vm := m.Vm()
 
 	batches := numExamples / batchSize
+	if numExamples%batchSize != 0 {
+		batches++
+	}
 
-	for b := 0; b <= batches; b++ {
+	for b := 0; b < batches; b++ {
 		start := b * batchSize
 		end := start + batchSize
 		if start >= numExamples {
@@ -257,36 +286,60 @@ func Predict(m Model, numExamples, batchSize int, si *rcmd.SampleInfo, inputs te
 			xCtxFeatureVal    tensor.Tensor
 		)
 
-		if xUserProfileVal, err = inputs.Slice([]tensor.Slice{G.S(start, start+batchSize), G.S(si.UserProfileRange[0], si.UserProfileRange[1])}...); err != nil {
+		if xUserProfileVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.UserProfileRange[0], si.UserProfileRange[1])}...); err != nil {
 			log.Errorf("Unable to slice xUserProfileVal %v", err)
 			return nil, err
+		}
+		if xUserProfileVal.Shape()[0] < batchSize {
+			if xUserProfileVal, err = FillTensorRows(batchSize, xUserProfileVal); err != nil {
+				log.Errorf("Unable to fill input rows %v", err)
+				return nil, err
+			}
 		}
 		if err = G.Let(xUserProfile, xUserProfileVal); err != nil {
 			log.Errorf("Unable to let xUserProfileVal %v", err)
 			return nil, err
 		}
 
-		if xUserBehaviorsVal, err = inputs.Slice([]tensor.Slice{G.S(start, start+batchSize), G.S(si.UserBehaviorRange[0], si.UserBehaviorRange[1])}...); err != nil {
+		if xUserBehaviorsVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.UserBehaviorRange[0], si.UserBehaviorRange[1])}...); err != nil {
 			log.Errorf("Unable to slice xUserBehaviorsVal %v", err)
 			return nil, err
+		}
+		if xUserBehaviorsVal.Shape()[0] < batchSize {
+			if xUserBehaviorsVal, err = FillTensorRows(batchSize, xUserBehaviorsVal); err != nil {
+				log.Errorf("Unable to fill input rows %v", err)
+				return nil, err
+			}
 		}
 		if err = G.Let(xUbMatrix, xUserBehaviorsVal); err != nil {
 			log.Errorf("Unable to let xUserBehaviorsVal %v", err)
 			return nil, err
 		}
 
-		if xItemFeatureVal, err = inputs.Slice([]tensor.Slice{G.S(start, start+batchSize), G.S(si.ItemFeatureRange[0], si.ItemFeatureRange[1])}...); err != nil {
+		if xItemFeatureVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.ItemFeatureRange[0], si.ItemFeatureRange[1])}...); err != nil {
 			log.Errorf("Unable to slice xItemFeatureVal %v", err)
 			return nil, err
+		}
+		if xItemFeatureVal.Shape()[0] < batchSize {
+			if xItemFeatureVal, err = FillTensorRows(batchSize, xItemFeatureVal); err != nil {
+				log.Errorf("Unable to fill input rows %v", err)
+				return nil, err
+			}
 		}
 		if err = G.Let(xItemFeature, xItemFeatureVal); err != nil {
 			log.Errorf("Unable to let xItemFeatureVal %v", err)
 			return nil, err
 		}
 
-		if xCtxFeatureVal, err = inputs.Slice([]tensor.Slice{G.S(start, start+batchSize), G.S(si.CtxFeatureRange[0], si.CtxFeatureRange[1])}...); err != nil {
+		if xCtxFeatureVal, err = inputs.Slice([]tensor.Slice{G.S(start, end), G.S(si.CtxFeatureRange[0], si.CtxFeatureRange[1])}...); err != nil {
 			log.Errorf("Unable to slice xCtxFeatureVal %v", err)
 			return nil, err
+		}
+		if xCtxFeatureVal.Shape()[0] < batchSize {
+			if xCtxFeatureVal, err = FillTensorRows(batchSize, xCtxFeatureVal); err != nil {
+				log.Errorf("Unable to fill input rows %v", err)
+				return nil, err
+			}
 		}
 		if err = G.Let(xCtxFeature, xCtxFeatureVal); err != nil {
 			log.Errorf("Unable to let xCtxFeatureVal %v", err)
@@ -299,7 +352,7 @@ func Predict(m Model, numExamples, batchSize int, si *rcmd.SampleInfo, inputs te
 		}
 
 		//get y
-		yVal := outputNode.Value().Data().([]float64)
+		yVal := outputNode.Value().Data().([]float32)
 		for i := 0; i < end-start; i++ {
 			y = append(y, yVal[i])
 		}
@@ -309,27 +362,21 @@ func Predict(m Model, numExamples, batchSize int, si *rcmd.SampleInfo, inputs te
 	return
 }
 
-func accuracy(prediction, y []float64) float64 {
-	var ok float64
-	for i := 0; i < len(prediction); i++ {
-		if math.Round(prediction[i]-y[i]) == 0 {
-			ok += 1.0
-		}
+// FillTensorRows fills the batch samples with the zero data to make sample size fit the batch size
+// it sames tensor.Concat is not optimized for large dataset.
+// we should avoid using FillTensorRows while input data is large.
+func FillTensorRows(batchSize int, inputs tensor.Tensor) (x tensor.Tensor, err error) {
+	numExamples := inputs.Shape()[0]
+	fillSize := numExamples % batchSize
+	if fillSize == 0 {
+		return inputs, nil
 	}
-	return ok / float64(len(y))
-}
-
-func rocauc(pred, y []float64) float64 {
-	boolY := make([]float64, len(y))
-	for i := 0; i < len(y); i++ {
-		if y[i] > 0.5 {
-			boolY[i] = 1.0
-		} else {
-			boolY[i] = 0.0
-		}
+	inputZeros := tensor.New(tensor.WithShape(batchSize-fillSize, inputs.Shape()[1]),
+		tensor.WithBacking(make([]float32, (batchSize-fillSize)*inputs.Shape()[1])))
+	x, err = tensor.Concat(0, inputs, inputZeros)
+	if err != nil {
+		return nil, err
 	}
-	yTrue := mat.NewDense(len(y), 1, boolY)
-	yScore := mat.NewDense(len(pred), 1, pred)
 
-	return metrics.ROCAUCScore(yTrue, yScore, "", nil)
+	return
 }

@@ -23,7 +23,7 @@ type DinNet struct {
 	xUserProfile, xUbMatrix, xItemFeature, xCtxFeature *G.Node
 
 	mlp0, mlp1, mlp2 *G.Node // weights of MLP layers
-	d0, d1           float64 // dropout probabilities
+	d0, d1           float32 // dropout probabilities
 	att0             *G.Node // weights of attention layer
 	//att1       *G.Node // weights of Attention layers
 
@@ -36,11 +36,11 @@ type dinModel struct {
 	UBehaviorDim  int       `json:"uBehaviorDim"`
 	IFeatureDim   int       `json:"iFeatureDim"`
 	CFeatureDim   int       `json:"cFeatureDim"`
-	Mlp0          []float64 `json:"mlp0"`
-	Mlp1          []float64 `json:"mlp1"`
-	Mlp2          []float64 `json:"mlp2"`
-	Att0          []float64 `json:"att0"`
-	//Att1          []float64 `json:"att1"`
+	Mlp0          []float32 `json:"mlp0"`
+	Mlp1          []float32 `json:"mlp1"`
+	Mlp2          []float32 `json:"mlp2"`
+	Att0          []float32 `json:"att0"`
+	//Att1          []float32 `json:"att1"`
 }
 
 func (din *DinNet) Vm() G.VM {
@@ -58,11 +58,11 @@ func (din *DinNet) Marshal() (data []byte, err error) {
 		UBehaviorDim:  din.uBehaviorDim,
 		IFeatureDim:   din.iFeatureDim,
 		CFeatureDim:   din.cFeatureDim,
-		Mlp0:          din.mlp0.Value().Data().([]float64),
-		Mlp1:          din.mlp1.Value().Data().([]float64),
-		Mlp2:          din.mlp2.Value().Data().([]float64),
-		Att0:          din.att0.Value().Data().([]float64),
-		//Att1:          din.att1.Value().Data().([]float64),
+		Mlp0:          din.mlp0.Value().Data().([]float32),
+		Mlp1:          din.mlp1.Value().Data().([]float32),
+		Mlp2:          din.mlp2.Value().Data().([]float32),
+		Att0:          din.att0.Value().Data().([]float32),
+		//Att1:          din.att1.Value().Data().([]float32),
 	}
 
 	//marshal to json
@@ -88,20 +88,20 @@ func NewDinNetFromJson(data []byte) (din *DinNet, err error) {
 	// attention layer
 	att0 := G.NewMatrix(
 		g,
-		dt,
+		DT,
 		G.WithShape(1, uBehaviorSize),
 		G.WithValue(tensor.New(tensor.WithShape(1, uBehaviorSize), tensor.WithBacking(m.Att0))),
 		G.WithName("att0"),
 	)
 	//att1 := G.NewMatrix(
 	//	g,
-	//	dt,
+	//	DT,
 	//	G.WithShape(att0_1, 1),
 	//	G.WithValue(tensor.New(tensor.WithShape(att0_1, 1), tensor.WithBacking(m.Att1[i]))),
 	//	G.WithName("att1"),
 	//)
 
-	mlp0 := G.NewMatrix(g, dt,
+	mlp0 := G.NewMatrix(g, DT,
 		G.WithShape(uProfileDim+uBehaviorDim+iFeatureDim+cFeatureDim, mlp0_1),
 		G.WithName("mlp0"),
 		G.WithValue(tensor.New(
@@ -110,13 +110,13 @@ func NewDinNetFromJson(data []byte) (din *DinNet, err error) {
 		),
 	)
 
-	mlp1 := G.NewMatrix(g, dt,
+	mlp1 := G.NewMatrix(g, DT,
 		G.WithShape(mlp0_1, mlp1_2),
 		G.WithName("mlp1"),
 		G.WithValue(tensor.New(tensor.WithShape(mlp0_1, mlp1_2), tensor.WithBacking(m.Mlp1))),
 	)
 
-	mlp2 := G.NewMatrix(g, dt,
+	mlp2 := G.NewMatrix(g, DT,
 		G.WithShape(mlp1_2, 1),
 		G.WithName("mlp2"),
 		G.WithValue(tensor.New(tensor.WithShape(mlp1_2, 1), tensor.WithBacking(m.Mlp2))),
@@ -170,17 +170,17 @@ func NewDinNet(
 	}
 	g := G.NewGraph()
 	// attention layer
-	att0 := G.NewTensor(g, dt, 2, G.WithShape(1, uBehaviorSize), G.WithName("att0"), G.WithInit(G.ValuesOf(float64(1.0/uBehaviorSize))))
-	//att1 := G.NewTensor(g, dt, 3, G.WithShape(uBehaviorSize, att0_1, 1), G.WithName("att1"), G.WithInit(G.HeN(1.0)))
+	att0 := G.NewTensor(g, DT, 2, G.WithShape(1, uBehaviorSize), G.WithName("att0"), G.WithInit(G.ValuesOf(float32(1.0/uBehaviorSize))))
+	//att1 := G.NewTensor(g, DT, 3, G.WithShape(uBehaviorSize, att0_1, 1), G.WithName("att1"), G.WithInit(G.Gaussian(0, 1.0)))
 
 	// user behaviors are represented as a sequence of item embeddings. Before
 	// being fed into the MLP, we need to flatten the sequence into a single with
 	// sum pooling with Attention as the weights which is the key point of DIN model.
-	mlp0 := G.NewMatrix(g, dt, G.WithShape(uProfileDim+uBehaviorDim+iFeatureDim+cFeatureDim, mlp0_1), G.WithName("mlp0"), G.WithInit(G.HeN(1.0)))
+	mlp0 := G.NewMatrix(g, DT, G.WithShape(uProfileDim+uBehaviorDim+iFeatureDim+cFeatureDim, mlp0_1), G.WithName("mlp0"), G.WithInit(G.Gaussian(0, 1.0)))
 
-	mlp1 := G.NewMatrix(g, dt, G.WithShape(mlp0_1, mlp1_2), G.WithName("mlp1"), G.WithInit(G.HeN(1.0)))
+	mlp1 := G.NewMatrix(g, DT, G.WithShape(mlp0_1, mlp1_2), G.WithName("mlp1"), G.WithInit(G.Gaussian(0, 1.0)))
 
-	mlp2 := G.NewMatrix(g, dt, G.WithShape(mlp1_2, 1), G.WithName("mlp2"), G.WithInit(G.HeN(1.0)))
+	mlp2 := G.NewMatrix(g, DT, G.WithShape(mlp1_2, 1), G.WithName("mlp2"), G.WithInit(G.Gaussian(0, 1.0)))
 
 	return &DinNet{
 		uProfileDim:   uProfileDim,
@@ -260,7 +260,7 @@ func (din *DinNet) Fwd(xUserProfile, xUbMatrix, xItemFeature, xCtxFeature *G.Nod
 		nil, []byte{2},
 	))
 
-	//actOuts := G.NewTensor(din.Graph(), dt, 2, G.WithShape(batchSize, uBehaviorDim), G.WithName("actOuts"), G.WithInit(G.Zeroes()))
+	//actOuts := G.NewTensor(din.Graph(), DT, 2, G.WithShape(batchSize, uBehaviorDim), G.WithName("actOuts"), G.WithInit(G.Zeroes()))
 	//for i := 0; i < uBehaviorSize; i++ {
 	//	// xUserBehaviors[:, i, :], ub.shape: [batchSize, uBehaviorDim]
 	//	ub := G.Must(G.Slice(xUserBehaviors, []tensor.Slice{nil, G.S(i)}...))
@@ -290,11 +290,11 @@ func (din *DinNet) Fwd(xUserProfile, xUbMatrix, xItemFeature, xCtxFeature *G.Nod
 	// mlp0.Shape: [userProfileDim+userBehaviorDim+itemFeatureDim+contextFeatureDim, 200]
 	// out.Shape: [batchSize, 200]
 	mlp0Out := G.Must(G.Sigmoid(G.Must(G.Mul(concat, din.mlp0))))
-	mlp0Out = G.Must(G.Dropout(mlp0Out, din.d0))
+	mlp0Out = G.Must(G.Dropout(mlp0Out, float64(din.d0)))
 	// mlp1.Shape: [200, 80]
 	// out.Shape: [batchSize, 80]
 	mlp1Out := G.Must(G.Sigmoid(G.Must(G.Mul(mlp0Out, din.mlp1))))
-	mlp1Out = G.Must(G.Dropout(mlp1Out, din.d1))
+	mlp1Out = G.Must(G.Dropout(mlp1Out, float64(din.d1)))
 	// mlp2.Shape: [80, 1]
 	// out.Shape: [batchSize, 1]
 	mlp2Out := G.Must(G.Sigmoid(G.Must(G.Mul(mlp1Out, din.mlp2))))

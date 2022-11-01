@@ -26,5 +26,6 @@ type Model interface {
 	Save(io.Writer, vector.Type) error
 	WordVector(vector.Type) *matrix.Matrix
 	GenEmbeddingMap() (map[string][]float64, error)
+	GenEmbeddingMap32() (map[string][]float32, error)
 	EmbeddingByWord(word string) ([]float64, bool)
 }

@@ -24,7 +24,9 @@ func TestUtils(t *testing.T) {
 
 func TestGetAUC(t *testing.T) {
 	Convey("test auc", t, func() {
-		auc := RocAuc([]bool{false, true, false, true}, []float64{0.1, 0.35, 0.4, 0.8})
+		auc := RocAuc([]float64{0.1, 0.35, 0.4, 0.8}, []float64{0, 1, 0, 1})
+		So(auc, ShouldEqual, .75)
+		auc = RocAuc([]float64{0.1, 0.4, 0.35, 0.8}, []float64{0, 0, 1, 1})
 		So(auc, ShouldEqual, .75)
 	})
 }
