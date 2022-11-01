@@ -46,7 +46,7 @@ func TestFeatureEngineer(t *testing.T) {
 		testData := []struct {
 			userId   int
 			itemId   int
-			expected float64
+			expected float32
 		}{
 			{8, 527, 1.},
 			{8, 432, 0.},
@@ -68,8 +68,8 @@ func TestFeatureEngineer(t *testing.T) {
 			fmt.Printf("userId:%d, itemId:%d, expected:%f, pred:%f\n",
 				test.userId, test.itemId, test.expected, score[0].Score)
 			//So(pred.At(0, 0), ShouldAlmostEqual, test.expected)
-			yTrue.Set(i, 0, test.expected)
-			yPred.Set(i, 0, score[0].Score)
+			yTrue.Set(i, 0, float64(test.expected))
+			yPred.Set(i, 0, float64(score[0].Score))
 		}
 
 		rocAuc := metrics.ROCAUCScore(yTrue, yPred, "", nil)
@@ -84,9 +84,10 @@ func TestFeatureEngineer(t *testing.T) {
 		var (
 			userId     int
 			itemId     int
-			rating     float64
+			rating     float32
 			timestamp  int64
 			yTrue      = mat.NewDense(testCount, 1, nil)
+			yPredDense = mat.NewDense(testCount, 1, nil)
 			sampleKeys = make([]rcmd.Sample, 0, testCount)
 		)
 		for i := 0; rows.Next(); i++ {
@@ -94,13 +95,20 @@ func TestFeatureEngineer(t *testing.T) {
 			if err != nil {
 				t.Errorf("scan error: %v", err)
 			}
-			yTrue.Set(i, 0, BinarizeLabel(rating))
+			yTrue.Set(i, 0, BinarizeLabel(float64(rating)))
 			sampleKeys = append(sampleKeys, rcmd.Sample{userId, itemId, 0, timestamp})
 		}
 		batchPredictCtx := context.Background()
 		yPred, err := rcmd.BatchPredict(batchPredictCtx, model, sampleKeys)
 		So(err, ShouldBeNil)
-		rocAuc := metrics.ROCAUCScore(yTrue, yPred, "", nil)
+		for i := 0; i < testCount; i++ {
+			val, err := yPred.At(i, 0)
+			if err != nil {
+				t.Errorf("yPred.At error: %v", err)
+			}
+			yPredDense.Set(i, 0, float64(val.(float32)))
+		}
+		rocAuc := metrics.ROCAUCScore(yTrue, yPredDense, "", nil)
 		rowCount, _ := yTrue.Dims()
 		fmt.Printf("rocAuc on test set %d: %f\n", rowCount, rocAuc)
 	})

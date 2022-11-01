@@ -13,6 +13,7 @@ import (
 	"github.com/auxten/edgeRec/feature"
 	"github.com/auxten/edgeRec/nn"
 	"github.com/auxten/edgeRec/ps"
+	"github.com/auxten/edgeRec/recommend"
 	"github.com/auxten/edgeRec/schema"
 	"github.com/auxten/edgeRec/utils"
 	log "github.com/sirupsen/logrus"
@@ -84,7 +85,7 @@ func TestTrain(t *testing.T) {
 
 		fmt.Printf("training data count: %d\n", trainCount)
 		// training
-		trainSample := make(ps.Samples, trainCount)
+		trainSample := make(recommend.Samples, trainCount)
 		{
 			trainRows, err := scanner.GetRows(fmt.Sprintf(`select date, date_block_num, shop_id, s.item_id, item_price, item_category_id, item_name, item_cnt_day from sales_train s 
 				left join items i on s.item_id = i.item_id limit %d`, trainCount))
@@ -104,7 +105,7 @@ func TestTrain(t *testing.T) {
 				if err != nil {
 					log.Fatal(err)
 				}
-				trainSample[i] = ps.Sample{
+				trainSample[i] = recommend.Sample{
 					Input:    featureTransform(date, date_block_num, shop_id, item_id, item_price, item_category_id.Float64, item_name.String),
 					Response: []float64{outputTransform(item_cnt_day)}}
 				i++
@@ -118,7 +119,7 @@ func TestTrain(t *testing.T) {
 		// 10% test data
 		fmt.Printf("test data count: %d\n", testCount)
 		i = 0
-		testSample := make(ps.Samples, testCount)
+		testSample := make(recommend.Samples, testCount)
 		rows, err := scanner.GetRows(fmt.Sprintf(`select date, date_block_num, shop_id, s.item_id, item_price, item_category_id, item_name, 
 			item_cnt_day from sales_train s 
 				left join items i on s.item_id = i.item_id limit %d, %d`, trainCount, testCount))
@@ -138,7 +139,7 @@ func TestTrain(t *testing.T) {
 			if err != nil {
 				log.Fatal(err)
 			}
-			testSample[i] = ps.Sample{
+			testSample[i] = recommend.Sample{
 				Input:    featureTransform(date, date_block_num, shop_id, item_id, item_price, item_category_id.Float64, item_name.String),
 				Response: []float64{outputTransform(item_cnt_day)}}
 			i++

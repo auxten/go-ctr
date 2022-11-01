@@ -6,7 +6,6 @@ import (
 	"github.com/auxten/edgeRec/model/din"
 	rcmd "github.com/auxten/edgeRec/recommend"
 	log "github.com/sirupsen/logrus"
-	"gonum.org/v1/gonum/mat"
 	"gorgonia.org/tensor"
 )
 
@@ -29,18 +28,14 @@ type mlpImpl struct {
 	pred    *din.SimpleMLP
 }
 
-func (d *mlpImpl) Predict(X mat.Matrix, Y mat.Mutable) *mat.Dense {
-	numPred, _ := X.Dims()
-	inputTensor := tensor.New(tensor.WithShape(X.Dims()), tensor.WithBacking(X.(*mat.Dense).RawMatrix().Data))
-	y, err := din.Predict(d.pred, numPred, d.predBatchSize, d.sampleInfo, inputTensor)
+func (d *mlpImpl) Predict(X tensor.Tensor) tensor.Tensor {
+	numPred := X.Shape()[0]
+	y, err := din.Predict(d.pred, numPred, d.predBatchSize, d.sampleInfo, X)
 	if err != nil {
 		log.Errorf("predict din model failed: %v", err)
 		return nil
 	}
-	yDense := mat.NewDense(numPred, 1, y)
-	if Y != nil {
-		Y.(*mat.Dense).SetRawMatrix(yDense.RawMatrix())
-	}
+	yDense := tensor.NewDense(din.DT, tensor.Shape{numPred, 1}, tensor.WithBacking(y))
 
 	return yDense
 }
@@ -53,31 +48,17 @@ func (d *mlpImpl) Fit(trainSample *rcmd.TrainSample) (pred rcmd.PredictAbstract,
 	d.cFeatureDim = trainSample.Info.CtxFeatureRange[1] - trainSample.Info.CtxFeatureRange[0]
 	d.sampleInfo = &trainSample.Info
 
-	sampleLen := len(trainSample.Data)
-	X := mat.NewDense(sampleLen, len(trainSample.Data[0].Input), nil)
-	for i, sample := range trainSample.Data {
-		X.SetRow(i, sample.Input)
-	}
-	Y := mat.NewDense(sampleLen, 1, nil)
-	for i, sample := range trainSample.Data {
-		Y.Set(i, 0, sample.Response[0])
-	}
-
-	d.learner = din.NewSimpleMLP(d.uProfileDim, d.uBehaviorSize, d.uBehaviorDim, d.iFeatureDim, d.cFeatureDim)
-	var (
-		inputs, labels tensor.Tensor
-		numExamples, _ = X.Dims()
-		numLabels, _   = Y.Dims()
-	)
-	if numExamples != numLabels {
+	if trainSample.Rows != len(trainSample.Y) {
 		err = fmt.Errorf("number of examples and labels do not match")
 		return
 	}
 
-	inputs = tensor.New(tensor.WithShape(X.Dims()), tensor.WithBacking(X.RawMatrix().Data))
-	labels = tensor.New(tensor.WithShape(Y.Dims()), tensor.WithBacking(Y.RawMatrix().Data))
+	d.learner = din.NewSimpleMLP(d.uProfileDim, d.uBehaviorSize, d.uBehaviorDim, d.iFeatureDim, d.cFeatureDim)
+
+	inputs := tensor.New(tensor.WithShape(trainSample.Rows, trainSample.XCols), tensor.WithBacking(trainSample.X))
+	labels := tensor.New(tensor.WithShape(trainSample.Rows, 1), tensor.WithBacking(trainSample.Y))
 	err = din.Train(d.uProfileDim, d.uBehaviorSize, d.uBehaviorDim, d.iFeatureDim, d.cFeatureDim,
-		numExamples, d.batchSize, d.epochs, d.earlyStop,
+		trainSample.Rows, d.batchSize, d.epochs, d.earlyStop,
 		d.sampleInfo,
 		inputs, labels,
 		d.learner,
