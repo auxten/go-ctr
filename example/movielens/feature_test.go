@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/auxten/edgeRec/model/mlp"
 	"github.com/auxten/edgeRec/nn/metrics"
 	nn "github.com/auxten/edgeRec/nn/neural_network"
 	rcmd "github.com/auxten/edgeRec/recommend"
@@ -38,7 +39,7 @@ func TestFeatureEngineer(t *testing.T) {
 	trainCtx := context.Background()
 	log.SetLevel(log.DebugLevel)
 	Convey("feature engineering", t, func() {
-		model, err = rcmd.Train(trainCtx, recSys, &fitWrap{model: fitter})
+		model, err = rcmd.Train(trainCtx, recSys, &mlp.SimpleMlpFitWrap{Model: fitter})
 		So(err, ShouldBeNil)
 	})
 

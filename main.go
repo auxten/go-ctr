@@ -6,6 +6,7 @@ import (
 	"flag"
 
 	"github.com/auxten/edgeRec/example/movielens"
+	"github.com/auxten/edgeRec/model/mlp"
 	nn "github.com/auxten/edgeRec/nn/neural_network"
 	rcmd "github.com/auxten/edgeRec/recommend"
 	log "github.com/sirupsen/logrus"
@@ -48,7 +49,7 @@ func main() {
 	// fiter.LearningRateInit = .0025
 
 	trainCtx := context.Background()
-	model, err = rcmd.Train(trainCtx, recSys, fiter)
+	model, err = rcmd.Train(trainCtx, recSys, &mlp.SimpleMlpFitWrap{Model: fiter})
 	if err != nil {
 		log.Fatal(err)
 	}
