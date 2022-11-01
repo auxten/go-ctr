@@ -109,30 +109,30 @@ func TestMultiModel(t *testing.T) {
 		So(auc, ShouldBeGreaterThan, 0.5)
 	})
 
-	mlpModel := NewSimpleMLP(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim)
-	Convey("Simple MLP", t, func() {
+	youtubeDnnModel := NewYoutubeDnn(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim)
+	Convey("Youtube DNN", t, func() {
 		err := Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim,
 			numExamples, batchSize, epochs, 10,
 			sampleInfo,
 			inputs, labels,
-			mlpModel,
+			youtubeDnnModel,
 		)
 		So(err, ShouldBeNil)
 	})
 
-	var mlpPredict *SimpleMLP
-	Convey("Simple MLP marshal and new from json", t, func() {
-		mlpJson, err := mlpModel.Marshal()
+	var yDnnPredict *YoutubeDnn
+	Convey("Youtube DNN marshal and new from json", t, func() {
+		mlpJson, err := youtubeDnnModel.Marshal()
 		So(err, ShouldBeNil)
 		//log.Debugf("mlpJson: %s", mlpJson)
-		mlpPredict, err = NewSimpleMLPFromJson(mlpJson)
+		yDnnPredict, err = NewYoutubeDnnFromJson(mlpJson)
 		So(err, ShouldBeNil)
 	})
 
-	Convey("Simple MLP predict", t, func() {
-		err := InitForwardOnlyVm(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim, testBatchSize, mlpPredict)
+	Convey("Youtube DNN predict", t, func() {
+		err := InitForwardOnlyVm(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim, testBatchSize, yDnnPredict)
 		So(err, ShouldBeNil)
-		predictions, err := Predict(mlpPredict, testSamples, testBatchSize, sampleInfo, inputs)
+		predictions, err := Predict(yDnnPredict, testSamples, testBatchSize, sampleInfo, inputs)
 		So(err, ShouldBeNil)
 		So(predictions, ShouldNotBeNil)
 		So(predictions, ShouldHaveLength, testSamples)

@@ -11,7 +11,7 @@ import (
 	. "github.com/smartystreets/goconvey/convey"
 )
 
-func TestSimpleMLPOnMovielens(t *testing.T) {
+func TestYoutubeDnnOnMovielens(t *testing.T) {
 	rand.Seed(42)
 
 	rcmd.DebugUserId = 429
@@ -27,20 +27,20 @@ func TestSimpleMLPOnMovielens(t *testing.T) {
 		err   error
 	)
 
-	Convey("Train din model", t, func() {
-		mlpImpl := &mlpImpl{
+	Convey("Train youtube Dnn model", t, func() {
+		yDnnImpl := &YoutubeDnnImpl{
 			predBatchSize: 100,
 			batchSize:     200,
 			epochs:        200,
 			earlyStop:     20,
 		}
 		trainCtx := context.Background()
-		model, err = rcmd.Train(trainCtx, movielens, mlpImpl)
+		model, err = rcmd.Train(trainCtx, movielens, yDnnImpl)
 		So(err, ShouldBeNil)
 		So(model, ShouldNotBeNil)
 	})
 
-	Convey("Predict din model", t, func() {
+	Convey("Predict youtube Dnn model", t, func() {
 		testCount := 20600
 		rows, err := db.Query(
 			"SELECT userId, movieId, rating, timestamp FROM ratings_test ORDER BY timestamp, userId ASC LIMIT ?", testCount)
@@ -63,12 +63,12 @@ func TestSimpleMLPOnMovielens(t *testing.T) {
 			sampleKeys = append(sampleKeys, rcmd.Sample{userId, itemId, 0, timestamp})
 		}
 		batchPredictCtx := context.Background()
-		dinPred := &dinPredictor{
+		yDnnPred := &dnnPredictor{
 			PreRanker:    movielens,
 			Predictor:    model,
 			UserBehavior: movielens,
 		}
-		yPred, err := rcmd.BatchPredict(batchPredictCtx, dinPred, sampleKeys)
+		yPred, err := rcmd.BatchPredict(batchPredictCtx, yDnnPred, sampleKeys)
 		So(err, ShouldBeNil)
 		rocAuc := utils.RocAuc32(yPred.Data().([]float32), yTrue)
 		rowCount := len(yTrue)

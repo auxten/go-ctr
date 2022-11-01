@@ -11,7 +11,7 @@ import (
 	. "github.com/smartystreets/goconvey/convey"
 )
 
-type dinPredictor struct {
+type dnnPredictor struct {
 	rcmd.PreRanker
 	rcmd.Predictor
 	rcmd.UserBehavior
@@ -71,7 +71,7 @@ func TestDinOnMovielens(t *testing.T) {
 			sampleKeys = append(sampleKeys, rcmd.Sample{userId, itemId, 0, timestamp})
 		}
 		batchPredictCtx := context.Background()
-		dinPred := &dinPredictor{
+		dinPred := &dnnPredictor{
 			PreRanker:    movielens,
 			Predictor:    model,
 			UserBehavior: movielens,
