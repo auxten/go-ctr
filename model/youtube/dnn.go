@@ -1,10 +1,18 @@
-package din
+package youtube
 
 import (
 	"encoding/json"
 
+	"github.com/auxten/edgeRec/model"
 	G "gorgonia.org/gorgonia"
 	"gorgonia.org/tensor"
+)
+
+const (
+	// magic numbers for din paper
+	att0_1 = 36
+	mlp0_1 = 200
+	mlp1_2 = 80
 )
 
 type YoutubeDnn struct {
@@ -67,19 +75,19 @@ func NewYoutubeDnnFromJson(data []byte) (mlp *YoutubeDnn, err error) {
 		mlp0_0        = uProfileDim + uBehaviorDim + iFeatureDim + cFeatureDim
 	)
 
-	mlp0 := G.NewMatrix(g, DT,
+	mlp0 := G.NewMatrix(g, model.DT,
 		G.WithShape(mlp0_0, mlp0_1),
 		G.WithName("mlp0"),
 		G.WithValue(tensor.New(tensor.WithShape(mlp0_0, mlp0_1), tensor.WithBacking(m.Mlp0))),
 	)
 
-	mlp1 := G.NewMatrix(g, DT,
+	mlp1 := G.NewMatrix(g, model.DT,
 		G.WithShape(mlp0_1, mlp1_2),
 		G.WithName("mlp1"),
 		G.WithValue(tensor.New(tensor.WithShape(mlp0_1, mlp1_2), tensor.WithBacking(m.Mlp1))),
 	)
 
-	mlp2 := G.NewMatrix(g, DT,
+	mlp2 := G.NewMatrix(g, model.DT,
 		G.WithShape(mlp1_2, 1),
 		G.WithName("mlp2"),
 		G.WithValue(tensor.New(tensor.WithShape(mlp1_2, 1), tensor.WithBacking(m.Mlp2))),
@@ -141,7 +149,7 @@ func (mlp *YoutubeDnn) Out() *G.Node {
 	return mlp.out
 }
 
-func (mlp *YoutubeDnn) learnable() G.Nodes {
+func (mlp *YoutubeDnn) Learnable() G.Nodes {
 	return G.Nodes{mlp.mlp0, mlp.mlp1, mlp.mlp2}
 }
 

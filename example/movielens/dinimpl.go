@@ -3,6 +3,7 @@ package movielens
 import (
 	"fmt"
 
+	"github.com/auxten/edgeRec/model"
 	"github.com/auxten/edgeRec/model/din"
 	rcmd "github.com/auxten/edgeRec/recommend"
 	log "github.com/sirupsen/logrus"
@@ -30,12 +31,12 @@ type dinImpl struct {
 
 func (d *dinImpl) Predict(X tensor.Tensor) tensor.Tensor {
 	numPred := X.Shape()[0]
-	y, err := din.Predict(d.pred, numPred, d.PredBatchSize, d.sampleInfo, X)
+	y, err := model.Predict(d.pred, numPred, d.PredBatchSize, d.sampleInfo, X)
 	if err != nil {
 		log.Errorf("predict din model failed: %v", err)
 		return nil
 	}
-	yDense := tensor.NewDense(din.DT, tensor.Shape{numPred, 1}, tensor.WithBacking(y))
+	yDense := tensor.NewDense(model.DT, tensor.Shape{numPred, 1}, tensor.WithBacking(y))
 
 	return yDense
 }
@@ -59,7 +60,7 @@ func (d *dinImpl) Fit(trainSample *rcmd.TrainSample) (pred rcmd.PredictAbstract,
 
 	d.learner = din.NewDinNet(d.uProfileDim, d.uBehaviorSize, d.uBehaviorDim, d.iFeatureDim, d.cFeatureDim)
 
-	err = din.Train(d.uProfileDim, d.uBehaviorSize, d.uBehaviorDim, d.iFeatureDim, d.cFeatureDim,
+	err = model.Train(d.uProfileDim, d.uBehaviorSize, d.uBehaviorDim, d.iFeatureDim, d.cFeatureDim,
 		trainSample.Rows, d.BatchSize, d.epochs, d.earlyStop,
 		d.sampleInfo,
 		inputs, labels,
@@ -79,7 +80,7 @@ func (d *dinImpl) Fit(trainSample *rcmd.TrainSample) (pred rcmd.PredictAbstract,
 		log.Errorf("new din model from json failed: %v", err)
 		return
 	}
-	err = din.InitForwardOnlyVm(d.uProfileDim, d.uBehaviorSize, d.uBehaviorDim, d.iFeatureDim, d.cFeatureDim,
+	err = model.InitForwardOnlyVm(d.uProfileDim, d.uBehaviorSize, d.uBehaviorDim, d.iFeatureDim, d.cFeatureDim,
 		d.PredBatchSize, dinPred)
 	if err != nil {
 		log.Errorf("init forward only vm failed: %v", err)
