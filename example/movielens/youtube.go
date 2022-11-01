@@ -9,7 +9,7 @@ import (
 	"gorgonia.org/tensor"
 )
 
-type mlpImpl struct {
+type YoutubeDnnImpl struct {
 	uProfileDim   int
 	uBehaviorSize int
 	uBehaviorDim  int
@@ -24,11 +24,11 @@ type mlpImpl struct {
 	// 0 means no early stop
 	earlyStop int
 
-	learner *din.SimpleMLP
-	pred    *din.SimpleMLP
+	learner *din.YoutubeDnn
+	pred    *din.YoutubeDnn
 }
 
-func (d *mlpImpl) Predict(X tensor.Tensor) tensor.Tensor {
+func (d *YoutubeDnnImpl) Predict(X tensor.Tensor) tensor.Tensor {
 	numPred := X.Shape()[0]
 	y, err := din.Predict(d.pred, numPred, d.predBatchSize, d.sampleInfo, X)
 	if err != nil {
@@ -40,7 +40,7 @@ func (d *mlpImpl) Predict(X tensor.Tensor) tensor.Tensor {
 	return yDense
 }
 
-func (d *mlpImpl) Fit(trainSample *rcmd.TrainSample) (pred rcmd.PredictAbstract, err error) {
+func (d *YoutubeDnnImpl) Fit(trainSample *rcmd.TrainSample) (pred rcmd.PredictAbstract, err error) {
 	d.uProfileDim = trainSample.Info.UserProfileRange[1] - trainSample.Info.UserProfileRange[0]
 	d.uBehaviorSize = rcmd.UserBehaviorLen
 	d.uBehaviorDim = rcmd.ItemEmbDim
@@ -53,7 +53,7 @@ func (d *mlpImpl) Fit(trainSample *rcmd.TrainSample) (pred rcmd.PredictAbstract,
 		return
 	}
 
-	d.learner = din.NewSimpleMLP(d.uProfileDim, d.uBehaviorSize, d.uBehaviorDim, d.iFeatureDim, d.cFeatureDim)
+	d.learner = din.NewYoutubeDnn(d.uProfileDim, d.uBehaviorSize, d.uBehaviorDim, d.iFeatureDim, d.cFeatureDim)
 
 	inputs := tensor.New(tensor.WithShape(trainSample.Rows, trainSample.XCols), tensor.WithBacking(trainSample.X))
 	labels := tensor.New(tensor.WithShape(trainSample.Rows, 1), tensor.WithBacking(trainSample.Y))
@@ -73,7 +73,7 @@ func (d *mlpImpl) Fit(trainSample *rcmd.TrainSample) (pred rcmd.PredictAbstract,
 		return
 	}
 	//log.Debugf("din model json: %s", dinJson)
-	dinPred, err := din.NewSimpleMLPFromJson(dinJson)
+	dinPred, err := din.NewYoutubeDnnFromJson(dinJson)
 	if err != nil {
 		log.Errorf("new din model from json failed: %v", err)
 		return
