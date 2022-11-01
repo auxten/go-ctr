@@ -22,6 +22,8 @@ func TestDinOnMovielens(t *testing.T) {
 
 	var (
 		movielens = &MovielensRec{
+			//DataPath:  "movielens-20m.db",
+			//SampleCnt: 14400000,
 			DataPath:  "movielens.db",
 			SampleCnt: 79948,
 			//SampleCnt: 10000,
@@ -33,9 +35,10 @@ func TestDinOnMovielens(t *testing.T) {
 	Convey("Train din model", t, func() {
 		dinModel := &dinImpl{
 			PredBatchSize: 100,
-			BatchSize:     200,
-			epochs:        100,
-			earlyStop:     20,
+			//BatchSize:     5000,
+			BatchSize: 200,
+			epochs:    100,
+			earlyStop: 20,
 		}
 		trainCtx := context.Background()
 		model, err = rcmd.Train(trainCtx, movielens, dinModel)
@@ -44,6 +47,7 @@ func TestDinOnMovielens(t *testing.T) {
 	})
 
 	Convey("Predict din model", t, func() {
+		//testCount := 5610000
 		testCount := 20600
 		rows, err := db.Query(
 			"SELECT userId, movieId, rating, timestamp FROM ratings_test ORDER BY timestamp, userId ASC LIMIT ?", testCount)
