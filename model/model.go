@@ -1,4 +1,4 @@
-package din
+package model
 
 import (
 	"fmt"
@@ -13,15 +13,8 @@ import (
 
 var DT = tensor.Float32
 
-const (
-	// magic numbers for din paper
-	att0_1 = 36
-	mlp0_1 = 200
-	mlp1_2 = 80
-)
-
 type Model interface {
-	learnable() G.Nodes
+	Learnable() G.Nodes
 	Fwd(xUserProfile, ubMatrix, xItemFeature, xCtxFeature *G.Node, batchSize, uBehaviorSize, uBehaviorDim int) (err error)
 	Out() *G.Node
 	In() G.Nodes
@@ -64,7 +57,7 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 	//var yOut G.Value
 	//G.Read(m.Out(), &yOut)
 
-	if _, err = G.Grad(cost, m.learnable()...); err != nil {
+	if _, err = G.Grad(cost, m.Learnable()...); err != nil {
 		log.Fatal(err)
 	}
 
@@ -72,7 +65,7 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 	//ioutil.WriteFile("fullGraph.dot", []byte(g.ToDot()), 0644)
 	// log.Printf("%v", prog)
 	// logger := log.New(os.Stderr, "", 0)
-	// vm := gorgonia.NewTapeMachine(g, gorgonia.BindDualValues(m.learnable()...), gorgonia.WithLogger(logger), gorgonia.WithWatchlist())
+	// vm := gorgonia.NewTapeMachine(g, gorgonia.BindDualValues(m.Learnable()...), gorgonia.WithLogger(logger), gorgonia.WithWatchlist())
 
 	prog, locMap, err := G.Compile(g)
 	if err != nil {
@@ -82,7 +75,7 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 
 	vm := G.NewTapeMachine(g,
 		G.WithPrecompiled(prog, locMap),
-		G.BindDualValues(m.learnable()...),
+		G.BindDualValues(m.Learnable()...),
 		//G.TraceExec(),
 		//G.WithInfWatch(),
 		//G.WithNaNWatch(),
@@ -200,7 +193,7 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 			if err = vm.RunAll(); err != nil {
 				log.Fatalf("Failed at epoch  %d, batch %d. Error: %v", i, b, err)
 			}
-			if err = solver.Step(G.NodesToValueGrads(m.learnable())); err != nil {
+			if err = solver.Step(G.NodesToValueGrads(m.Learnable())); err != nil {
 				log.Fatalf("Failed to update nodes with gradients at epoch %d, batch %d. Error %v", i, b, err)
 			}
 			vm.Reset()

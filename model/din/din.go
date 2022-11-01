@@ -4,10 +4,18 @@ import (
 	"encoding/json"
 	_ "net/http/pprof"
 
+	"github.com/auxten/edgeRec/model"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	G "gorgonia.org/gorgonia"
 	"gorgonia.org/tensor"
+)
+
+const (
+	// magic numbers for din paper
+	att0_1 = 36
+	mlp0_1 = 200
+	mlp1_2 = 80
 )
 
 type DinNet struct {
@@ -88,20 +96,20 @@ func NewDinNetFromJson(data []byte) (din *DinNet, err error) {
 	// attention layer
 	att0 := G.NewMatrix(
 		g,
-		DT,
+		model.DT,
 		G.WithShape(1, uBehaviorSize),
 		G.WithValue(tensor.New(tensor.WithShape(1, uBehaviorSize), tensor.WithBacking(m.Att0))),
 		G.WithName("att0"),
 	)
 	//att1 := G.NewMatrix(
 	//	g,
-	//	DT,
+	//	model.DT,
 	//	G.WithShape(att0_1, 1),
 	//	G.WithValue(tensor.New(tensor.WithShape(att0_1, 1), tensor.WithBacking(m.Att1[i]))),
 	//	G.WithName("att1"),
 	//)
 
-	mlp0 := G.NewMatrix(g, DT,
+	mlp0 := G.NewMatrix(g, model.DT,
 		G.WithShape(uProfileDim+uBehaviorDim+iFeatureDim+cFeatureDim, mlp0_1),
 		G.WithName("mlp0"),
 		G.WithValue(tensor.New(
@@ -110,13 +118,13 @@ func NewDinNetFromJson(data []byte) (din *DinNet, err error) {
 		),
 	)
 
-	mlp1 := G.NewMatrix(g, DT,
+	mlp1 := G.NewMatrix(g, model.DT,
 		G.WithShape(mlp0_1, mlp1_2),
 		G.WithName("mlp1"),
 		G.WithValue(tensor.New(tensor.WithShape(mlp0_1, mlp1_2), tensor.WithBacking(m.Mlp1))),
 	)
 
-	mlp2 := G.NewMatrix(g, DT,
+	mlp2 := G.NewMatrix(g, model.DT,
 		G.WithShape(mlp1_2, 1),
 		G.WithName("mlp2"),
 		G.WithValue(tensor.New(tensor.WithShape(mlp1_2, 1), tensor.WithBacking(m.Mlp2))),
@@ -150,7 +158,7 @@ func (din *DinNet) In() G.Nodes {
 	return G.Nodes{din.xUserProfile, din.xUbMatrix, din.xItemFeature, din.xCtxFeature}
 }
 
-func (din *DinNet) learnable() G.Nodes {
+func (din *DinNet) Learnable() G.Nodes {
 	ret := make(G.Nodes, 3, 3+2)
 	ret[0] = din.mlp0
 	ret[1] = din.mlp1
@@ -170,17 +178,17 @@ func NewDinNet(
 	}
 	g := G.NewGraph()
 	// attention layer
-	att0 := G.NewTensor(g, DT, 2, G.WithShape(1, uBehaviorSize), G.WithName("att0"), G.WithInit(G.ValuesOf(float32(1.0/uBehaviorSize))))
-	//att1 := G.NewTensor(g, DT, 3, G.WithShape(uBehaviorSize, att0_1, 1), G.WithName("att1"), G.WithInit(G.Gaussian(0, 1.0)))
+	att0 := G.NewTensor(g, model.DT, 2, G.WithShape(1, uBehaviorSize), G.WithName("att0"), G.WithInit(G.ValuesOf(float32(1.0/uBehaviorSize))))
+	//att1 := G.NewTensor(g, model.DT, 3, G.WithShape(uBehaviorSize, att0_1, 1), G.WithName("att1"), G.WithInit(G.Gaussian(0, 1.0)))
 
 	// user behaviors are represented as a sequence of item embeddings. Before
 	// being fed into the MLP, we need to flatten the sequence into a single with
 	// sum pooling with Attention as the weights which is the key point of DIN model.
-	mlp0 := G.NewMatrix(g, DT, G.WithShape(uProfileDim+uBehaviorDim+iFeatureDim+cFeatureDim, mlp0_1), G.WithName("mlp0"), G.WithInit(G.Gaussian(0, 1.0)))
+	mlp0 := G.NewMatrix(g, model.DT, G.WithShape(uProfileDim+uBehaviorDim+iFeatureDim+cFeatureDim, mlp0_1), G.WithName("mlp0"), G.WithInit(G.Gaussian(0, 1.0)))
 
-	mlp1 := G.NewMatrix(g, DT, G.WithShape(mlp0_1, mlp1_2), G.WithName("mlp1"), G.WithInit(G.Gaussian(0, 1.0)))
+	mlp1 := G.NewMatrix(g, model.DT, G.WithShape(mlp0_1, mlp1_2), G.WithName("mlp1"), G.WithInit(G.Gaussian(0, 1.0)))
 
-	mlp2 := G.NewMatrix(g, DT, G.WithShape(mlp1_2, 1), G.WithName("mlp2"), G.WithInit(G.Gaussian(0, 1.0)))
+	mlp2 := G.NewMatrix(g, model.DT, G.WithShape(mlp1_2, 1), G.WithName("mlp2"), G.WithInit(G.Gaussian(0, 1.0)))
 
 	return &DinNet{
 		uProfileDim:   uProfileDim,
@@ -260,7 +268,7 @@ func (din *DinNet) Fwd(xUserProfile, xUbMatrix, xItemFeature, xCtxFeature *G.Nod
 		nil, []byte{2},
 	))
 
-	//actOuts := G.NewTensor(din.Graph(), DT, 2, G.WithShape(batchSize, uBehaviorDim), G.WithName("actOuts"), G.WithInit(G.Zeroes()))
+	//actOuts := G.NewTensor(din.Graph(), model.DT, 2, G.WithShape(batchSize, uBehaviorDim), G.WithName("actOuts"), G.WithInit(G.Zeroes()))
 	//for i := 0; i < uBehaviorSize; i++ {
 	//	// xUserBehaviors[:, i, :], ub.shape: [batchSize, uBehaviorDim]
 	//	ub := G.Must(G.Slice(xUserBehaviors, []tensor.Slice{nil, G.S(i)}...))
