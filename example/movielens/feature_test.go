@@ -32,7 +32,7 @@ func TestFeatureEngineer(t *testing.T) {
 		"relu", "adam", 1e-5,
 	)
 	fitter.Verbose = true
-	fitter.MaxIter = 200
+	fitter.MaxIter = 100
 	fitter.LearningRate = "adaptive"
 	fitter.LearningRateInit = .0025
 

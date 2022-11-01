@@ -16,14 +16,14 @@ import (
 
 var (
 	SearchMovieIds = []string{"296", "63828", "59315", "58559", "59784"}
-	ModelFilePath  = "../../test/model.txt"
+	ModelFilePath  = "../../example/model.txt"
 	Dim            = 10
 )
 
 func TestEmbedding(t *testing.T) {
 	log.SetLevel(log.DebugLevel)
 	Convey("item embedding", t, func() {
-		db, err := sql.Open("sqlite3", "../../test/movielens-10m.db")
+		db, err := sql.Open("sqlite3", "../../example/movielens/movielens.db")
 
 		So(err, ShouldBeNil)
 		defer db.Close()
