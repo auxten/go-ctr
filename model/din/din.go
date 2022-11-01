@@ -178,7 +178,7 @@ func NewDinNet(
 	}
 	g := G.NewGraph()
 	// attention layer
-	att0 := G.NewTensor(g, model.DT, 2, G.WithShape(1, uBehaviorSize), G.WithName("att0"), G.WithInit(G.ValuesOf(float32(1.0/uBehaviorSize))))
+	att0 := G.NewTensor(g, model.DT, 2, G.WithShape(1, uBehaviorSize), G.WithName("att0"), G.WithInit(G.ValuesOf(float32(1.0))))
 	//att1 := G.NewTensor(g, model.DT, 3, G.WithShape(uBehaviorSize, att0_1, 1), G.WithName("att1"), G.WithInit(G.Gaussian(0, 1.0)))
 
 	// user behaviors are represented as a sequence of item embeddings. Before
@@ -288,7 +288,7 @@ func (din *DinNet) Fwd(xUserProfile, xUbMatrix, xItemFeature, xCtxFeature *G.Nod
 	//	// Sum pooling
 	//	actOuts = G.Must(G.Add(actOuts, actOut))
 	//}
-	actOutSum := G.Must(G.Sum(actOuts, 1))
+	actOutSum := G.Must(G.Mean(actOuts, 1))
 
 	// Concat all xUserProfile, actOuts, xItemFeature, xCtxFeature
 	concat := G.Must(G.Concat(1, xUserProfile, actOutSum, xItemFeature, xCtxFeature))
