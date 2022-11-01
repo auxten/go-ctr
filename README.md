@@ -14,7 +14,7 @@ Progress:
   - [x] Batch Normalization
 
 ### [YouTube DNN](./model/youtube/dnn.go)
-![youtube-dnn](./art/youtube.png)
+<img src="./art/youtube.png" alt="YouTube DNN" style="zoom:50%;" />
 
 Progress:
   - [x] [YouTube DNN test on MovieLens](./example/movielens/youtube_test.go)
@@ -22,7 +22,7 @@ Progress:
   - [ ] Batch Normalization
 
 ### [Deep Interest Network](./model/din/din.go)
-![din](./art/din.png) 
+<img src="./art/din.png" alt="Deep Interest Network" style="zoom:50%;" />
 
 Progress:
   - [x] [DIN test on MovieLens](./example/movielens/dinimpl_test.go)
