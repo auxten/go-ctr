@@ -16,8 +16,8 @@ type dinImpl struct {
 	iFeatureDim   int
 	cFeatureDim   int
 
-	predBatchSize     int
-	batchSize, epochs int
+	PredBatchSize     int
+	BatchSize, epochs int
 	sampleInfo        *rcmd.SampleInfo
 
 	// stop training on earlyStop count of no cost improvement
@@ -30,7 +30,7 @@ type dinImpl struct {
 
 func (d *dinImpl) Predict(X tensor.Tensor) tensor.Tensor {
 	numPred := X.Shape()[0]
-	y, err := din.Predict(d.pred, numPred, d.predBatchSize, d.sampleInfo, X)
+	y, err := din.Predict(d.pred, numPred, d.PredBatchSize, d.sampleInfo, X)
 	if err != nil {
 		log.Errorf("predict din model failed: %v", err)
 		return nil
@@ -60,7 +60,7 @@ func (d *dinImpl) Fit(trainSample *rcmd.TrainSample) (pred rcmd.PredictAbstract,
 	d.learner = din.NewDinNet(d.uProfileDim, d.uBehaviorSize, d.uBehaviorDim, d.iFeatureDim, d.cFeatureDim)
 
 	err = din.Train(d.uProfileDim, d.uBehaviorSize, d.uBehaviorDim, d.iFeatureDim, d.cFeatureDim,
-		trainSample.Rows, d.batchSize, d.epochs, d.earlyStop,
+		trainSample.Rows, d.BatchSize, d.epochs, d.earlyStop,
 		d.sampleInfo,
 		inputs, labels,
 		d.learner,
@@ -80,7 +80,7 @@ func (d *dinImpl) Fit(trainSample *rcmd.TrainSample) (pred rcmd.PredictAbstract,
 		return
 	}
 	err = din.InitForwardOnlyVm(d.uProfileDim, d.uBehaviorSize, d.uBehaviorDim, d.iFeatureDim, d.cFeatureDim,
-		d.predBatchSize, dinPred)
+		d.PredBatchSize, dinPred)
 	if err != nil {
 		log.Errorf("init forward only vm failed: %v", err)
 		return
