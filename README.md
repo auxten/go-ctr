@@ -16,6 +16,8 @@ Progress:
 ### [YouTube DNN](./model/youtube/dnn.go)
 <img src="./art/youtube.png" alt="YouTube DNN" width="400"/>
 
+GAUC on MovieLens 20M: **0.760381**
+
 Progress:
   - [x] [YouTube DNN test on MovieLens](./example/movielens/youtube_test.go)
   - [x] Dropout and L2 regularization
@@ -23,6 +25,8 @@ Progress:
 
 ### [Deep Interest Network](./model/din/din.go)
 <img src="./art/din.png" alt="Deep Interest Network" width="400"/>
+
+GAUC on MovieLens 20M: **0.790542**
 
 Progress:
   - [x] [DIN test on MovieLens](./example/movielens/dinimpl_test.go)
