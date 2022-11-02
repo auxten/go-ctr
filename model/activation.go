@@ -1,4 +1,4 @@
-package din
+package model
 
 import (
 	log "github.com/sirupsen/logrus"
@@ -44,5 +44,18 @@ func EucDistance(x, y *G.Node) (retVal *G.Node) {
 	}
 
 	retVal = G.Must(G.Sqrt(G.Must(G.Sum(G.Must(G.Square(sub)), x.Dims()-1))))
+	return
+}
+
+// CosineDistance is the cosine distance between two matrix, typically used for
+// calculating the distance between two embedding.
+// x, y Shape should be [batch, dim] or [batch, n, dim]
+func CosineDistance(x, y *G.Node) (retVal *G.Node) {
+	xNorm := G.Must(G.Sqrt(G.Must(G.Sum(G.Must(G.Square(x)), x.Dims()-1))))
+	yNorm := G.Must(G.Sqrt(G.Must(G.Sum(G.Must(G.Square(y)), y.Dims()-1))))
+	retVal = G.Must(G.HadamardDiv(
+		G.Must(G.Sum(G.Must(G.HadamardProd(x, y)), x.Dims()-1)),
+		G.Must(G.HadamardProd(xNorm, yNorm)),
+	))
 	return
 }

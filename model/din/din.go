@@ -226,9 +226,9 @@ func (din *DinNet) Fwd(xUserProfile, xUbMatrix, xItemFeature, xCtxFeature *G.Nod
 
 	// attention layer
 
-	// euclideanDistance: [batchSize, uBehaviorSize]
-	euclideanDistance := EucDistance(xUserBehaviors, xItemFeature3d)
-	//euclideanDistance3d := G.Must(G.Reshape(euclideanDistance, tensor.Shape{batchSize, uBehaviorSize, 1}))
+	// distance: [batchSize, uBehaviorSize]
+	distance := model.EucDistance(xUserBehaviors, xItemFeature3d)
+	//euclideanDistance3d := G.Must(G.Reshape(distance, tensor.Shape{batchSize, uBehaviorSize, 1}))
 
 	//// outProduct should computed batch by batch!!!!
 	//outProdVecs := make([]*G.Node, batchSize)
@@ -262,7 +262,7 @@ func (din *DinNet) Fwd(xUserProfile, xUbMatrix, xItemFeature, xCtxFeature *G.Nod
 				//[batchSize, uBehaviorSize]
 				//	⊙
 				//[:		, uBehaviorSize]
-				G.Must(G.BroadcastHadamardProd(euclideanDistance, din.att0, nil, []byte{0})),
+				G.Must(G.BroadcastHadamardProd(distance, din.att0, nil, []byte{0})),
 				tensor.Shape{batchSize, uBehaviorSize, 1},
 			)))),
 		nil, []byte{2},
@@ -274,7 +274,7 @@ func (din *DinNet) Fwd(xUserProfile, xUbMatrix, xItemFeature, xCtxFeature *G.Nod
 	//	ub := G.Must(G.Slice(xUserBehaviors, []tensor.Slice{nil, G.S(i)}...))
 	//	// Concat all xUserBehaviors[i], outProducts, xItemFeature
 	//	// actConcat.Shape() = [batchSize, uBehaviorDim+iFeatureDim+uBehaviorSize]
-	//	actConcat := G.Must(G.Concat(1, ub, euclideanDistance, xItemFeature))
+	//	actConcat := G.Must(G.Concat(1, ub, distance, xItemFeature))
 	//	actOut := G.Must(G.BroadcastHadamardProd(
 	//		ub,
 	//		G.Must(G.Sigmoid(

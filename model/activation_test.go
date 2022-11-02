@@ -1,4 +1,4 @@
-package din
+package model
 
 import (
 	"testing"
@@ -80,5 +80,21 @@ func TestEucDistance(t *testing.T) {
 		defer m.Close()
 		So([]int(output.Shape()), ShouldResemble, []int{3, 2})
 		So(output.Value().Data(), ShouldResemble, []float32{1, 1, 1, 1, 0, 1})
+	})
+}
+
+func TestCosineDistance(t *testing.T) {
+	Convey("cosine distance 2 dim", t, func() {
+		g := G.NewGraph()
+		x := G.NodeFromAny(g, tensor.New(tensor.WithShape(2, 6), tensor.WithBacking([]float32{1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1})), G.WithName("x"))
+		y := G.NodeFromAny(g, tensor.New(tensor.WithShape(2, 6), tensor.WithBacking([]float32{1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0})), G.WithName("y"))
+		output := CosineDistance(x, y)
+		m := G.NewTapeMachine(g)
+		if err := m.RunAll(); err != nil {
+			t.Fatalf("%+v", err)
+		}
+		defer m.Close()
+		So([]int(output.Shape()), ShouldResemble, []int{2})
+		So(output.Value().Data(), ShouldResemble, []float32{0.5, 0.5})
 	})
 }
