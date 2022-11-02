@@ -1,15 +1,17 @@
 name: Release
 on:
   push:
-   tags:
-    - '*'
+    tags:
+      - '*'
+  pull_request:
+    types: [opened, reopened, synchronize]
 jobs:
   build:
-    runs-on: "ubuntu-latest"
-    container: "debian:10.3"
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         node-version: [14]
+        os: ["ubuntu-20.04", "macos-11", "windows-2019"]
     steps:
       - name: Set up Go 1.18.x
         uses: actions/setup-go@v2
@@ -17,20 +19,10 @@ jobs:
           go-version: 1.18.x
         id: go
 
-      - name: Instasll tools
-        shell: bash
-        run: "apt update && apt install make curl gcc ca-certificates zip git -y"
-
-      - name: Install gox
-        run: go install github.com/mitchellh/gox@master
-
-      - name: Instasll node apt repo
-        shell: bash
-        run: "curl -sL https://deb.nodesource.com/setup_14.x | bash -"
-
-      - name: Instasll node
-        shell: bash
-        run: "apt install nodejs -y"
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 14
 
       - name: Step pnpm
         uses: pnpm/action-setup@v2.0.1
@@ -44,17 +36,17 @@ jobs:
         run: make build-frontend
 
       - name: Build go binary
-        shell: bash
-        run: gox -osarch='darwin/arm64 darwin/amd64 windows/arm64 windows/amd64 linux/arm64 linux/amd64' -ldflags="
-              -X main.Version=$(git describe --tags $(git rev-parse HEAD))
-              -X main.Commit=$(git rev-parse HEAD)" ./
+        run: make release-build
 
       - name: compress go binary
+        if: github.ref_type == 'tag'
         shell: bash
-        run: for i in edgeRec_*; do zip "$(echo $i | sed 's/\..*//').zip" $i; done
+        run: for i in edgeRec_*; do zip "$(echo $i | sed 's/\..*//').zip" $i || 7z a -tzip "$(echo $i | sed 's/\..*//').zip" $i; done
 
       - name: Upload Release
+        if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v1
         with:
           files: edgeRec*.zip
           draft: true
+
