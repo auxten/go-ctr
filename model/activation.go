@@ -1,7 +1,8 @@
 package model
 
 import (
-	log "github.com/sirupsen/logrus"
+	"fmt"
+
 	G "gorgonia.org/gorgonia"
 )
 
@@ -19,7 +20,7 @@ func PRelu32(x, slop *G.Node) (retVal *G.Node) {
 // Case1: x, y shapes are same, no broadcast. output shape will be x.shape[:-1]
 // Case2: x, y shapes are different, broadcast will be applied on the smaller dim.
 // output shape will be something like x.shape[:-1] but with a broadcast dim
-func EucDistance(x, y *G.Node) (retVal *G.Node) {
+func EucDistance(x, y *G.Node) (retVal *G.Node, err error) {
 	var sub *G.Node
 
 	if x.Dims() == y.Dims() {
@@ -40,7 +41,8 @@ func EucDistance(x, y *G.Node) (retVal *G.Node) {
 		}
 	}
 	if sub == nil {
-		log.Panicf("x, y shapes not supported: %v, %v", x.Shape(), y.Shape())
+		err = fmt.Errorf("x, y shapes not supported: %v, %v", x.Shape(), y.Shape())
+		return
 	}
 
 	retVal = G.Must(G.Sqrt(G.Must(G.Sum(G.Must(G.Square(sub)), x.Dims()-1))))
@@ -49,10 +51,30 @@ func EucDistance(x, y *G.Node) (retVal *G.Node) {
 
 // CosineDistance is the cosine distance between two matrix, typically used for
 // calculating the distance between two embedding.
-// x, y Shape should be [batch, dim] or [batch, n, dim]
-func CosineDistance(x, y *G.Node) (retVal *G.Node) {
+// Case1: x, y shapes are same, no broadcast. output shape will be x.shape[:-1]
+// Case2: x, y shapes are different, broadcast will be applied on the smaller dim.
+// output shape will be something like x.shape[:-1] but with a broadcast dim
+func CosineDistance(x, y *G.Node) (retVal *G.Node, err error) {
+	if x.Dims() != y.Dims() {
+		err = fmt.Errorf("x, y shapes not supported: %v, %v", x.Shape(), y.Shape())
+		return
+	}
+
+	for i := 0; i < x.Dims(); i++ {
+		if x.Shape()[i] != y.Shape()[i] {
+			if x.Shape()[i] < y.Shape()[i] {
+				x, y, err = G.Broadcast(x, y, G.NewBroadcastPattern([]byte{byte(i)}, nil))
+			} else {
+				x, y, err = G.Broadcast(x, y, G.NewBroadcastPattern(nil, []byte{byte(i)}))
+			}
+			if err != nil {
+				return
+			}
+		}
+	}
 	xNorm := G.Must(G.Sqrt(G.Must(G.Sum(G.Must(G.Square(x)), x.Dims()-1))))
 	yNorm := G.Must(G.Sqrt(G.Must(G.Sum(G.Must(G.Square(y)), y.Dims()-1))))
+
 	retVal = G.Must(G.HadamardDiv(
 		G.Must(G.Sum(G.Must(G.HadamardProd(x, y)), x.Dims()-1)),
 		G.Must(G.HadamardProd(xNorm, yNorm)),
