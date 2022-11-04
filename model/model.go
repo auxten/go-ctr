@@ -45,7 +45,7 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 
 	//losses := G.Must(G.HadamardProd(G.Must(G.Neg(G.Must(G.Log(m.out)))), y))
 	//losses := G.Must(G.Square(G.Must(G.Sub(m.Out(), y))))
-	cost := RMS32(m.Out(), y)
+	cost := BinaryCrossEntropy32(m.Out(), y)
 	// we want to track costs
 	//var costVal G.Value
 	//G.Read(cost, &costVal)

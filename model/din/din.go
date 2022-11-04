@@ -226,8 +226,8 @@ func (din *DinNet) Fwd(xUserProfile, xUbMatrix, xItemFeature, xCtxFeature *G.Nod
 
 	// attention layer
 
-	// distance: [batchSize, uBehaviorSize]
-	distance := G.Must(model.EucDistance(xUserBehaviors, xItemFeature3d))
+	// weight: [batchSize, uBehaviorSize]
+	weight := G.Must(G.Sub(G.NewConstant(float32(1.0)), G.Must(model.EucDistance(xUserBehaviors, xItemFeature3d))))
 	//euclideanDistance3d := G.Must(G.Reshape(distance, tensor.Shape{batchSize, uBehaviorSize, 1}))
 
 	//// outProduct should computed batch by batch!!!!
@@ -262,7 +262,7 @@ func (din *DinNet) Fwd(xUserProfile, xUbMatrix, xItemFeature, xCtxFeature *G.Nod
 				//[batchSize, uBehaviorSize]
 				//	⊙
 				//[:		, uBehaviorSize]
-				G.Must(G.BroadcastHadamardProd(distance, din.att0, nil, []byte{0})),
+				G.Must(G.BroadcastHadamardProd(weight, din.att0, nil, []byte{0})),
 				tensor.Shape{batchSize, uBehaviorSize, 1},
 			)))),
 		nil, []byte{2},

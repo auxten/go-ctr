@@ -49,12 +49,12 @@ func EucDistance(x, y *G.Node) (retVal *G.Node, err error) {
 	return
 }
 
-// CosineDistance is the cosine distance between two matrix, typically used for
+// CosineSimilarity is the cosine distance between two matrix, typically used for
 // calculating the distance between two embedding.
 // Case1: x, y shapes are same, no broadcast. output shape will be x.shape[:-1]
 // Case2: x, y shapes are different, broadcast will be applied on the smaller dim.
 // output shape will be something like x.shape[:-1] but with a broadcast dim
-func CosineDistance(x, y *G.Node) (retVal *G.Node, err error) {
+func CosineSimilarity(x, y *G.Node) (retVal *G.Node, err error) {
 	if x.Dims() != y.Dims() {
 		err = fmt.Errorf("x, y shapes not supported: %v, %v", x.Shape(), y.Shape())
 		return

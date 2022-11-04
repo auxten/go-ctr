@@ -156,9 +156,9 @@ func TestCosineDistance(t *testing.T) {
 		})), G.WithName("x"))
 		y := G.NodeFromAny(g, tensor.New(tensor.WithShape(2, 6), tensor.WithBacking([]float32{
 			1, 1, 0, 0, 1, 1,
-			1, 1, 1, 1, 0, 0,
+			-1, -1, -1, -1, 0, 0,
 		})), G.WithName("y"))
-		output, err := CosineDistance(x, y)
+		output, err := CosineSimilarity(x, y)
 		So(err, ShouldBeNil)
 		m := G.NewTapeMachine(g)
 		if err := m.RunAll(); err != nil {
@@ -166,7 +166,7 @@ func TestCosineDistance(t *testing.T) {
 		}
 		defer m.Close()
 		So([]int(output.Shape()), ShouldResemble, []int{2})
-		So(output.Value().Data(), ShouldResemble, []float32{0.5, 0.5})
+		So(output.Value().Data(), ShouldResemble, []float32{0.5, -0.5})
 	})
 	Convey("cosine distance 3 dim", t, func() {
 		g := G.NewGraph()
@@ -178,7 +178,7 @@ func TestCosineDistance(t *testing.T) {
 			1, 1, 0, 0, 1, 1,
 			1, 1, 1, 1, 0, 0,
 		})), G.WithName("y"))
-		output, err := CosineDistance(x, y)
+		output, err := CosineSimilarity(x, y)
 		So(err, ShouldBeNil)
 		m := G.NewTapeMachine(g)
 		if err := m.RunAll(); err != nil {
@@ -204,7 +204,7 @@ func TestCosineDistance(t *testing.T) {
 				1, 1, 1, 1, 0, 0,
 				1, 1, 1, 1, 0, 0,
 			})), G.WithName("y"))
-		output, err := CosineDistance(x, y)
+		output, err := CosineSimilarity(x, y)
 		So(err, ShouldBeNil)
 		m := G.NewTapeMachine(g)
 		if err := m.RunAll(); err != nil {
@@ -228,7 +228,7 @@ func TestCosineDistance(t *testing.T) {
 				1, 1, 1, 1, 0, 0,
 				1, 1, 1, 1, 0, 0,
 			})), G.WithName("y"))
-		_, err := CosineDistance(x, y)
+		_, err := CosineSimilarity(x, y)
 		So(err, ShouldNotBeNil)
 	})
 }
