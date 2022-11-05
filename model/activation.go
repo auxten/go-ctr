@@ -77,7 +77,7 @@ func CosineSimilarity(x, y *G.Node) (retVal *G.Node, err error) {
 
 	retVal = G.Must(G.HadamardDiv(
 		G.Must(G.Sum(G.Must(G.HadamardProd(x, y)), x.Dims()-1)),
-		G.Must(G.HadamardProd(xNorm, yNorm)),
+		G.Must(G.Add(G.Must(G.HadamardProd(xNorm, yNorm)), G.NewConstant(float32(1e-8)))),
 	))
 	return
 }

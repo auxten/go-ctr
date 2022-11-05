@@ -227,7 +227,14 @@ func (din *DinNet) Fwd(xUserProfile, xUbMatrix, xItemFeature, xCtxFeature *G.Nod
 	// attention layer
 
 	// weight: [batchSize, uBehaviorSize]
-	weight := G.Must(G.Sub(G.NewConstant(float32(1.0)), G.Must(model.EucDistance(xUserBehaviors, xItemFeature3d))))
+	//weight := G.Must(G.Sub(G.NewConstant(float32(1.0)), G.Must(model.EucDistance(xUserBehaviors, xItemFeature3d))))
+	weight := G.Must(G.Div(
+		G.Must(G.Add(
+			G.Must(model.CosineSimilarity(xUserBehaviors, xItemFeature3d)),
+			G.NewConstant(float32(1.0)),
+		)),
+		G.NewConstant(float32(2.0)),
+	))
 	//euclideanDistance3d := G.Must(G.Reshape(distance, tensor.Shape{batchSize, uBehaviorSize, 1}))
 
 	//// outProduct should computed batch by batch!!!!
