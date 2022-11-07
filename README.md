@@ -31,6 +31,7 @@ GAUC on MovieLens 20M: **0.790542**
 Progress:
   - [x] [DIN test on MovieLens](./example/movielens/dinimpl_test.go)
   - [x] [Euclidean Distance based attention](model/din/activation.go)
+  - [x] [Cosine Similarity based attention](model/din/activation.go)
   - [x] Dropout and L2 regularization
   - [ ] Batch Normalization
 
