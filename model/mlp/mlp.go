@@ -1,9 +1,9 @@
 package mlp
 
 import (
-	"github.com/auxten/edgeRec/nn/base"
-	nn "github.com/auxten/edgeRec/nn/neural_network"
-	rcmd "github.com/auxten/edgeRec/recommend"
+	"github.com/auxten/go-ctr/nn/base"
+	nn "github.com/auxten/go-ctr/nn/neural_network"
+	rcmd "github.com/auxten/go-ctr/recommend"
 	"gonum.org/v1/gonum/mat"
 	"gorgonia.org/tensor"
 )

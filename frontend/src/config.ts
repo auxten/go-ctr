@@ -1,3 +1,3 @@
 export const globalConfig = {
-  title: 'edgeRec',
+  title: 'go-ctr',
 }

@@ -3,9 +3,9 @@ package movielens
 import (
 	"fmt"
 
-	"github.com/auxten/edgeRec/model"
-	"github.com/auxten/edgeRec/model/din"
-	rcmd "github.com/auxten/edgeRec/recommend"
+	"github.com/auxten/go-ctr/model"
+	"github.com/auxten/go-ctr/model/din"
+	rcmd "github.com/auxten/go-ctr/recommend"
 	log "github.com/sirupsen/logrus"
 	"gorgonia.org/tensor"
 )

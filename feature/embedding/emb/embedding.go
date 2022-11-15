@@ -21,7 +21,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/auxten/edgeRec/feature/embedding/emb/embutil"
+	"github.com/auxten/go-ctr/feature/embedding/emb/embutil"
 	"github.com/pkg/errors"
 )
 

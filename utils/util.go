@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/auxten/edgeRec/nn/metrics"
+	"github.com/auxten/go-ctr/nn/metrics"
 	"gonum.org/v1/gonum/mat"
 )
 

@@ -18,11 +18,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/auxten/edgeRec/feature/embedding/corpus"
-	"github.com/auxten/edgeRec/feature/embedding/corpus/cpsutil"
-	"github.com/auxten/edgeRec/feature/embedding/corpus/dictionary"
-	"github.com/auxten/edgeRec/feature/embedding/util/clock"
-	"github.com/auxten/edgeRec/feature/embedding/util/verbose"
+	"github.com/auxten/go-ctr/feature/embedding/corpus"
+	"github.com/auxten/go-ctr/feature/embedding/corpus/cpsutil"
+	"github.com/auxten/go-ctr/feature/embedding/corpus/dictionary"
+	"github.com/auxten/go-ctr/feature/embedding/util/clock"
+	"github.com/auxten/go-ctr/feature/embedding/util/verbose"
 )
 
 type Corpus struct {

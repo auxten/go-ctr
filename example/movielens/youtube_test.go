@@ -6,8 +6,8 @@ import (
 	"math/rand"
 	"testing"
 
-	rcmd "github.com/auxten/edgeRec/recommend"
-	"github.com/auxten/edgeRec/utils"
+	rcmd "github.com/auxten/go-ctr/recommend"
+	"github.com/auxten/go-ctr/utils"
 	. "github.com/smartystreets/goconvey/convey"
 )
 

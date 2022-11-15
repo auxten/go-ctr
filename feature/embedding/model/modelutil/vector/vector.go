@@ -20,10 +20,10 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/auxten/edgeRec/feature/embedding/corpus/dictionary"
-	"github.com/auxten/edgeRec/feature/embedding/model/modelutil/matrix"
-	"github.com/auxten/edgeRec/feature/embedding/util/clock"
-	"github.com/auxten/edgeRec/feature/embedding/util/verbose"
+	"github.com/auxten/go-ctr/feature/embedding/corpus/dictionary"
+	"github.com/auxten/go-ctr/feature/embedding/model/modelutil/matrix"
+	"github.com/auxten/go-ctr/feature/embedding/util/clock"
+	"github.com/auxten/go-ctr/feature/embedding/util/verbose"
 )
 
 func InvalidTypeError(typ Type) error {

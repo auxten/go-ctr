@@ -1,5 +1,5 @@
 {
-  "name": "edge-rec-frontend",
+  "name": "go-ctr-frontend",
   "version": "1.0.0",
   "scripts": {
     "new": "plop --plopfile ./plop-templates/plopfile.js",
@@ -70,9 +70,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/auxten/edgeRec.git"
+    "url": "https://github.com/auxten/go-ctr.git"
   },
-  "homepage": "https://github.com/auxten/edgeRec/tree/main/frontend",
+  "homepage": "https://github.com/auxten/go-ctr/tree/main/frontend",
   "author": "Xiaotian (Allen) Peng",
   "license": "MIT",
   "browserslist": [

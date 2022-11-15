@@ -1,8 +1,8 @@
 package embedding
 
 import (
-	"github.com/auxten/edgeRec/feature/embedding/model"
-	"github.com/auxten/edgeRec/feature/embedding/model/word2vec"
+	"github.com/auxten/go-ctr/feature/embedding/model"
+	"github.com/auxten/go-ctr/feature/embedding/model/word2vec"
 	log "github.com/sirupsen/logrus"
 )
 

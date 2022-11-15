@@ -10,10 +10,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/auxten/edgeRec/feature"
-	"github.com/auxten/edgeRec/feature/ubcache"
-	rcmd "github.com/auxten/edgeRec/recommend"
-	"github.com/auxten/edgeRec/utils"
+	"github.com/auxten/go-ctr/feature"
+	"github.com/auxten/go-ctr/feature/ubcache"
+	rcmd "github.com/auxten/go-ctr/recommend"
+	"github.com/auxten/go-ctr/utils"
 	_ "github.com/mattn/go-sqlite3"
 	log "github.com/sirupsen/logrus"
 )

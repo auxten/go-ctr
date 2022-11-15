@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/auxten/edgeRec/feature"
-	"github.com/auxten/edgeRec/nn"
-	"github.com/auxten/edgeRec/ps"
-	"github.com/auxten/edgeRec/recommend"
-	"github.com/auxten/edgeRec/schema"
-	"github.com/auxten/edgeRec/utils"
+	"github.com/auxten/go-ctr/feature"
+	"github.com/auxten/go-ctr/nn"
+	"github.com/auxten/go-ctr/ps"
+	"github.com/auxten/go-ctr/recommend"
+	"github.com/auxten/go-ctr/schema"
+	"github.com/auxten/go-ctr/utils"
 	log "github.com/sirupsen/logrus"
 	. "github.com/smartystreets/goconvey/convey"
 )

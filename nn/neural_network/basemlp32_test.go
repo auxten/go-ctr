@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/auxten/edgeRec/nn/base"
+	"github.com/auxten/go-ctr/nn/base"
 	"github.com/pa-m/sklearn/datasets"
 )
 

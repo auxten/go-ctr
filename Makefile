@@ -7,7 +7,7 @@ version := $(shell git describe --tags --always --dirty)
 ## run lint to format golang code
 lint:
 	gofmt -w -s ./
-	goimports -local github.com/auxten/edgeRec -w ./
+	goimports -local github.com/auxten/go-ctr -w ./
 
 ## build frontend
 build-frontend:
@@ -16,8 +16,8 @@ build-frontend:
 
 ## build golang backend
 build: build-frontend
-	CGO_ENABLED=1 go build -o edgeRec main.go
+	CGO_ENABLED=1 go build -o go-ctr main.go
 
 ## build golang backend
 release-build: build-frontend
-	CGO_ENABLED=1 go build -ldflags=" -X main.Version=$(version) -X main.Commit=$(commit)" -o "edgeRec_$$(go env GOOS)_$$(go env GOARCH)" main.go
+	CGO_ENABLED=1 go build -ldflags=" -X main.Version=$(version) -X main.Commit=$(commit)" -o "go-ctr_$$(go env GOOS)_$$(go env GOARCH)" main.go

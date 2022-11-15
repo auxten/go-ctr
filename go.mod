@@ -1,4 +1,4 @@
-module github.com/auxten/edgeRec
+module github.com/auxten/go-ctr
 
 go 1.18
 

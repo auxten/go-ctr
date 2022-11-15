@@ -17,7 +17,7 @@ package dictionary
 import (
 	"sort"
 
-	"github.com/auxten/edgeRec/feature/embedding/corpus/dictionary/node"
+	"github.com/auxten/go-ctr/feature/embedding/corpus/dictionary/node"
 )
 
 func (d *Dictionary) HuffnamTree(dim int) []*node.Node {

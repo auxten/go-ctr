@@ -98,7 +98,7 @@ func TestColNorm(t *testing.T) {
 // 	//"golang.org/x/exp/rand"
 // 	"testing"
 
-// 	//lm "github.com/auxten/edgeRec/nn/linear_model"
+// 	//lm "github.com/auxten/go-ctr/nn/linear_model"
 // 	"gonum.org/v1/gonum/mat"
 // 	"gonum.org/v1/gonum/optimize"
 // 	//"time"

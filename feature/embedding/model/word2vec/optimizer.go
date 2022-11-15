@@ -17,10 +17,10 @@ package word2vec
 import (
 	"math/rand"
 
-	"github.com/auxten/edgeRec/feature/embedding/corpus/dictionary"
-	"github.com/auxten/edgeRec/feature/embedding/corpus/dictionary/node"
-	"github.com/auxten/edgeRec/feature/embedding/model/modelutil"
-	"github.com/auxten/edgeRec/feature/embedding/model/modelutil/matrix"
+	"github.com/auxten/go-ctr/feature/embedding/corpus/dictionary"
+	"github.com/auxten/go-ctr/feature/embedding/corpus/dictionary/node"
+	"github.com/auxten/go-ctr/feature/embedding/model/modelutil"
+	"github.com/auxten/go-ctr/feature/embedding/model/modelutil/matrix"
 )
 
 type optimizer interface {

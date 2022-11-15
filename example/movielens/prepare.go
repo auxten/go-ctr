@@ -4,9 +4,9 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/auxten/edgeRec/feature/ubcache"
-	rcmd "github.com/auxten/edgeRec/recommend"
-	"github.com/auxten/edgeRec/utils"
+	"github.com/auxten/go-ctr/feature/ubcache"
+	rcmd "github.com/auxten/go-ctr/recommend"
+	"github.com/auxten/go-ctr/utils"
 	log "github.com/sirupsen/logrus"
 )
 

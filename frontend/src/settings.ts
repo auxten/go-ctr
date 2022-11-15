@@ -1,5 +1,5 @@
 export const defaultSettings =  {
-  title: 'EdgeRec Admin',
+  title: 'go-ctr Admin',
 
   /**
    * @type {boolean} true | false
