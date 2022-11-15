@@ -41,12 +41,12 @@ jobs:
       - name: compress go binary
         if: github.ref_type == 'tag'
         shell: bash
-        run: for i in edgeRec_*; do zip "$(echo $i | sed 's/\..*//').zip" $i || 7z a -tzip "$(echo $i | sed 's/\..*//').zip" $i; done
+        run: for i in go-ctr_*; do zip "$(echo $i | sed 's/\..*//').zip" $i || 7z a -tzip "$(echo $i | sed 's/\..*//').zip" $i; done
 
       - name: Upload Release
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v1
         with:
-          files: edgeRec*.zip
+          files: go-ctr*.zip
           draft: true
 

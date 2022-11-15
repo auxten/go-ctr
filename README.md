@@ -1,8 +1,14 @@
-# edgeRec
+# go-ctr
 
 ![logo](art/logo.png)
 
-Deep Learning(Item2vec Embedding + MLP) based Feature-Engineering & Training & Predict all in one Recommendation System that can run on small server or edge device.
+Recommendation(Click-Through Rate Prediction) Framework for Go, including:
+
+1. Model Training & Prediction
+1. Item2vec Embedding
+1. Feature-Engineering
+1. Common Cost Functions and Metric Functions: AUC, Accuracy, MSE, RMS, Binary Cross Entropy, etc.
+1. Common Models
 
 # Models implemented
 
@@ -41,11 +47,11 @@ You can run the MovieLens training and predict demo by:
 
 ```shell
 # download and unzip the SQLite DB file
-wget https://github.com/auxten/edgeRec/files/9895974/movielens.db.zip && \
+wget https://github.com/auxten/go-ctr/files/9895974/movielens.db.zip && \
   unzip movielens.db.zip
-# compile the edgeRec and put it in the current directory
-GOBIN=`pwd` go install github.com/auxten/edgeRec@latest && \
-  ./edgeRec
+# compile the go-ctr and put it in the current directory
+GOBIN=`pwd` go install github.com/auxten/go-ctr@latest && \
+  ./go-ctr
 ```
 
 Wait for the message shown: `Listening and serving HTTP on :8080`.
@@ -101,7 +107,7 @@ if you prefer `show me the code`, just go to [MovieLens Example](example/moviele
     }
     ```
    All you need to do is implement the functions of the gray part:
-   ![](art/edgerec.png)
+   ![](art/go-ctr.png)
 
 # Features
 
@@ -188,11 +194,11 @@ To make this project work, quite a lot of code are copied and modified from the 
   - [go-fastapi](https://github.com/sashabaranov/go-fastapi)
 - Gopher logo with [GIMP](https://www.gimp.org/):
   - [ashleymcnamara/gophers](https://github.com/ashleymcnamara/gophers)
-- [JetBrains](https://www.jetbrains.com/?from=auxten/EdgeRec) for providing free license for this project.
+- [JetBrains](https://www.jetbrains.com/?from=auxten/go-ctr) for providing free license for this project.
 
 # Papers related
 
 - [YouTube DNN](https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/45530.pdf)
 - [Deep Interest Network for Click-Through Rate Prediction](https://arxiv.org/abs/1706.06978)
 - [Document Embedding with Paragraph Vectors](https://arxiv.org/abs/1507.07998)
-- [EdgeRec: Recommender System on Edge in Mobile Taobao](https://arxiv.org/abs/2005.08416) // not very identical implementation
+- [go-ctr: Recommender System on Edge in Mobile Taobao](https://arxiv.org/abs/2005.08416) // not very identical implementation

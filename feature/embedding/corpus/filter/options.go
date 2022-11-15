@@ -17,7 +17,7 @@ package filter
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/auxten/edgeRec/feature/embedding/corpus/dictionary"
+	"github.com/auxten/go-ctr/feature/embedding/corpus/dictionary"
 )
 
 var (

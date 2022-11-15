@@ -3,7 +3,7 @@ package metrics
 import (
 	"fmt"
 
-	"github.com/auxten/edgeRec/feature/preprocessing"
+	"github.com/auxten/go-ctr/feature/preprocessing"
 	"gonum.org/v1/gonum/mat"
 	"gonum.org/v1/gonum/stat"
 )

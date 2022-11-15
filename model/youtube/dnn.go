@@ -3,7 +3,7 @@ package youtube
 import (
 	"encoding/json"
 
-	"github.com/auxten/edgeRec/model"
+	"github.com/auxten/go-ctr/model"
 	G "gorgonia.org/gorgonia"
 	"gorgonia.org/tensor"
 )

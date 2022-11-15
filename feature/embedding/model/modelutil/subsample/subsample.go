@@ -18,7 +18,7 @@ import (
 	"math"
 	"math/rand"
 
-	"github.com/auxten/edgeRec/feature/embedding/corpus/dictionary"
+	"github.com/auxten/go-ctr/feature/embedding/corpus/dictionary"
 )
 
 type Subsampler struct {

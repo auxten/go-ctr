@@ -15,8 +15,8 @@
 package word2vec
 
 import (
-	"github.com/auxten/edgeRec/feature/embedding/model/modelutil"
-	"github.com/auxten/edgeRec/feature/embedding/model/modelutil/matrix"
+	"github.com/auxten/go-ctr/feature/embedding/model/modelutil"
+	"github.com/auxten/go-ctr/feature/embedding/model/modelutil/matrix"
 )
 
 type mod interface {

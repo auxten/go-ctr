@@ -5,10 +5,10 @@ import (
 	"embed"
 	"flag"
 
-	"github.com/auxten/edgeRec/example/movielens"
-	"github.com/auxten/edgeRec/model/mlp"
-	nn "github.com/auxten/edgeRec/nn/neural_network"
-	rcmd "github.com/auxten/edgeRec/recommend"
+	"github.com/auxten/go-ctr/example/movielens"
+	"github.com/auxten/go-ctr/model/mlp"
+	nn "github.com/auxten/go-ctr/nn/neural_network"
+	rcmd "github.com/auxten/go-ctr/recommend"
 	log "github.com/sirupsen/logrus"
 )
 

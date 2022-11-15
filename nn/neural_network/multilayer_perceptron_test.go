@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/auxten/edgeRec/feature/preprocessing"
-	"github.com/auxten/edgeRec/nn/base"
-	"github.com/auxten/edgeRec/nn/metrics"
+	"github.com/auxten/go-ctr/feature/preprocessing"
+	"github.com/auxten/go-ctr/nn/base"
+	"github.com/auxten/go-ctr/nn/metrics"
 	"github.com/chewxy/math32"
 	"github.com/pa-m/sklearn/datasets"
 	"gonum.org/v1/gonum/blas/blas32"

@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/exp/rand"
 
-	"github.com/auxten/edgeRec/nn/base"
+	"github.com/auxten/go-ctr/nn/base"
 
 	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/mat"

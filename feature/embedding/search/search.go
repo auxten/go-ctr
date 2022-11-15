@@ -18,9 +18,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/auxten/edgeRec/feature/embedding/emb"
-	"github.com/auxten/edgeRec/feature/embedding/emb/embutil"
-	"github.com/auxten/edgeRec/feature/embedding/search/searchutil"
+	"github.com/auxten/go-ctr/feature/embedding/emb"
+	"github.com/auxten/go-ctr/feature/embedding/emb/embutil"
+	"github.com/auxten/go-ctr/feature/embedding/search/searchutil"
 	"github.com/olekukonko/tablewriter"
 )
 

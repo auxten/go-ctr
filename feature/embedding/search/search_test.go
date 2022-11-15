@@ -20,8 +20,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/auxten/edgeRec/feature/embedding/emb"
-	"github.com/auxten/edgeRec/feature/embedding/emb/embutil"
+	"github.com/auxten/go-ctr/feature/embedding/emb"
+	"github.com/auxten/go-ctr/feature/embedding/emb/embutil"
 )
 
 func TestSearchInternal(t *testing.T) {

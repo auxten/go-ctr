@@ -20,7 +20,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/auxten/edgeRec/feature/embedding/emb/embutil"
+	"github.com/auxten/go-ctr/feature/embedding/emb/embutil"
 	"github.com/stretchr/testify/assert"
 )
 

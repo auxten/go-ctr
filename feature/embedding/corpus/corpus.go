@@ -15,8 +15,8 @@
 package corpus
 
 import (
-	"github.com/auxten/edgeRec/feature/embedding/corpus/dictionary"
-	"github.com/auxten/edgeRec/feature/embedding/util/verbose"
+	"github.com/auxten/go-ctr/feature/embedding/corpus/dictionary"
+	"github.com/auxten/go-ctr/feature/embedding/util/verbose"
 )
 
 type Corpus interface {

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	_ "net/http/pprof"
 
-	"github.com/auxten/edgeRec/model"
+	"github.com/auxten/go-ctr/model"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	G "gorgonia.org/gorgonia"

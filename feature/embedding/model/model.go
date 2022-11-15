@@ -17,8 +17,8 @@ package model
 import (
 	"io"
 
-	"github.com/auxten/edgeRec/feature/embedding/model/modelutil/matrix"
-	"github.com/auxten/edgeRec/feature/embedding/model/modelutil/vector"
+	"github.com/auxten/go-ctr/feature/embedding/model/modelutil/matrix"
+	"github.com/auxten/go-ctr/feature/embedding/model/modelutil/vector"
 )
 
 type Model interface {

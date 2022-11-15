@@ -60,7 +60,7 @@ const menus = [
       h(
         'a',
         {
-          href: 'https://github.com/auxten/edgeRec',
+          href: 'https://github.com/auxten/go-ctr',
           target: '_blank',
           rel: 'noopenner noreferrer',
         },

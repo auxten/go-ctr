@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 
-	rcmd "github.com/auxten/edgeRec/recommend"
+	rcmd "github.com/auxten/go-ctr/recommend"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/cheggaaa/pb.v1"
 	G "gorgonia.org/gorgonia"
@@ -28,7 +28,7 @@ func Train(uProfileDim, uBehaviorSize, uBehaviorDim, iFeatureDim, cFeatureDim in
 	numExamples, batchSize, epochs, earlyStop int,
 	si *rcmd.SampleInfo,
 	inputs, targets tensor.Tensor,
-	//testInputs, testTargets tensor.Tensor,
+//testInputs, testTargets tensor.Tensor,
 	m Model,
 ) (err error) {
 	g := m.Graph()
