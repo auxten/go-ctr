@@ -14,7 +14,6 @@ Recommendation(Click-Through Rate Prediction) Framework for Go, including:
 
 ### [Simple 2 layer MLP](./model/mlp/mlp.go)
 
-Progress:
   - [x] [Simple 2 layer MLP test on MovieLens](./example/movielens/feature_test.go)
   - [x] Dropout and L2 regularization
   - [x] Batch Normalization
@@ -24,7 +23,6 @@ Progress:
 
 GAUC on MovieLens 20M: **0.760381**
 
-Progress:
   - [x] [YouTube DNN test on MovieLens](./example/movielens/youtube_test.go)
   - [x] Dropout and L2 regularization
   - [ ] Batch Normalization
@@ -34,7 +32,6 @@ Progress:
 
 GAUC on MovieLens 20M: **0.790542**
 
-Progress:
   - [x] [DIN test on MovieLens](./example/movielens/dinimpl_test.go)
   - [x] [Euclidean Distance based attention](model/activation.go)
   - [x] [Cosine Similarity based attention](model/activation.go)
@@ -124,8 +121,7 @@ if you prefer `show me the code`, just go to [MovieLens Example](example/moviele
   - [ ] DeepL based Auto Feature Engineering
 - Demo
   - [x] MovieLens Demo 
-  - [ ] Android demo
-  - [ ] iOS demo
+
 
 # Benchmark
 
@@ -164,19 +160,6 @@ Search Embedding of:
 - Code: [example/movielens](example/movielens)
 - Training time: 28s
 - AUC: 0.782
-
-# Q&A
-
-- Q: What model do you use?
-- A: Just 2 layers of neural network and item2vec embedding.
-
-
-- Q: Where can I use this?
-- A: Simple system with a database. With 100 lines of golang, you got a better than nothing recommendation system.
-
-
-- Q: Where wouldn't I use this?
-- A: Large (100+ million) dataset using SOTA models.
 
 # Thanks
 
