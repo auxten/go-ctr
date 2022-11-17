@@ -106,6 +106,10 @@ if you prefer `show me the code`, just go to [MovieLens Example](example/moviele
    All you need to do is implement the functions of the gray part:
    ![](art/go-ctr.png)
 
+# Docs
+
+For more usage, please refer to the [docs](https://go-ctr.auxten.com/)
+
 # Features
 
 - [x] Pure Golang implementation, battery included.
