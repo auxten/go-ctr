@@ -14,12 +14,13 @@ Recommendation(Click-Through Rate Prediction) Framework for Go, including:
 
 ### [Simple 2 layer MLP](./model/mlp/mlp.go)
 
+GAUC on MovieLens 20M: **0.771258**
+
   - [x] [Simple 2 layer MLP test on MovieLens](./example/movielens/feature_test.go)
   - [x] Dropout and L2 regularization
   - [x] Batch Normalization
 
 ### [YouTube DNN](./model/youtube/dnn.go)
-<img src="./art/youtube.png" alt="YouTube DNN" width="400"/>
 
 GAUC on MovieLens 20M: **0.760381**
 
@@ -28,13 +29,11 @@ GAUC on MovieLens 20M: **0.760381**
   - [ ] Batch Normalization
 
 ### [Deep Interest Network](./model/din/din.go)
-<img src="./art/din.png" alt="Deep Interest Network" width="400"/>
 
 GAUC on MovieLens 20M: **0.790542**
 
   - [x] [DIN test on MovieLens](./example/movielens/dinimpl_test.go)
-  - [x] [Euclidean Distance based attention](model/activation.go)
-  - [x] [Cosine Similarity based attention](model/activation.go)
+  - [x] [Euclidean Distance](model/activation.go) and [Cosine Similarity](model/activation.go) based attention
   - [x] Dropout and L2 regularization
   - [ ] Batch Normalization
 
