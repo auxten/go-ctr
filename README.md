@@ -1,6 +1,6 @@
 # go-ctr
 
-<img src="art/logo.png" alt="logo" width="600">
+<img src="art/logo.png" alt="logo" width="800">
 
 Recommendation(Click-Through Rate Prediction) Framework for Go, including:
 
